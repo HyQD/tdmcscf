@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,7 @@ name = "tdmcscf"
 version = "0.1.0"
 description = "Time-dependent multi-configurational self-consistent field tools"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.15"
 license = { file = "LICENSE" }
 authors = [{ name = "tdmcscf contributors" }]
 classifiers = [
@@ -16,7 +16,17 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies = []
+dependencies = [
+    "HyQD-grid-lib>=1.1.0",
+    "numpy>=2.5.2,<2.6",
+    "scipy>=1.18.0,<1.19",
+    "opt-einsum",
+    "numba>=0.67.0,<0.68",
+    "sympy",
+    "packaging",
+    "tqdm",
+    "matplotlib",
+]
 
 [project.optional-dependencies]
 dev = [

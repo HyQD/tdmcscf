@@ -2,18 +2,37 @@
 
 Python package for time-dependent multi-configurational self-consistent field tools.
 
+Spherical-coordinate Coulomb mean-field construction and orbital action are
+available in `tdmcscf.grid.spherical`. See the
+[representation conventions and examples](docs/spherical_mean_fields.md).
+
+## Requirements
+
+Runtime requirements match `HyQD-grid-lib`: Python >=3.12,<3.15,
+NumPy >=2.5.2,<2.6, SciPy >=1.18.0,<1.19, and Numba >=0.67.0,<0.68,
+along with opt-einsum, SymPy, packaging, tqdm, and Matplotlib.
+`HyQD-grid-lib>=1.1.0` is also a runtime dependency.
+
 ## Installation
 
 Install in editable mode:
 
 ```bash
-pip install -e .
+python -m pip install -e .
+```
+
+The existing `scipy-1.18.0` conda environment on this machine satisfies the
+runtime requirements. From this repository, use its installed build tools:
+
+```bash
+conda activate scipy-1.18.0
+python -m pip install --no-build-isolation -e .
 ```
 
 Install with development dependencies:
 
 ```bash
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 ```
 
 ## Development
@@ -21,5 +40,5 @@ pip install -e ".[dev]"
 Run tests:
 
 ```bash
-pytest
+python -m pytest
 ```
