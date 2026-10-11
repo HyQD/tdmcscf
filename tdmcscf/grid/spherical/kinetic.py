@@ -1,10 +1,8 @@
 r"""Action of -laplacian/(2*mass) on reduced radial nodal orbitals."""
 
-from numbers import Real
-
 import numpy as np
 
-from ._validation import _integer, _orbitals
+from ._validation import _integer, _orbitals, _positive_real, _radial_data
 
 
 class SphericalKineticEnergy:
@@ -52,33 +50,9 @@ class SphericalKineticEnergy:
         self.m_max = self.l_max if m_max is None else _integer(m_max, "m_max")
         if self.m_max > self.l_max:
             raise ValueError("m_max cannot exceed l_max.")
-        if isinstance(mass, (bool, np.bool_)) or not isinstance(mass, Real):
-            raise TypeError("mass must be a positive finite real scalar.")
-        if not np.isfinite(mass) or mass <= 0:
-            raise ValueError("mass must be a positive finite real scalar.")
-        self._mass = float(mass)
-
-        r = np.asarray(radial_grid.r)
-        weights = np.asarray(radial_grid.weights)
+        self._mass = _positive_real(mass, "mass")
+        r, weights = _radial_data(radial_grid)
         D2 = np.asarray(radial_grid.D2)
-        if (
-            r.ndim != 1
-            or len(r) < 3
-            or np.iscomplexobj(r)
-            or not np.all(np.isfinite(r))
-            or r[0] != 0
-            or np.any(np.diff(r) <= 0)
-        ):
-            raise ValueError(
-                "The radial grid must be real, increasing, and start at zero."
-            )
-        if (
-            weights.shape != r.shape
-            or np.iscomplexobj(weights)
-            or not np.all(np.isfinite(weights))
-            or np.any(weights <= 0)
-        ):
-            raise ValueError("Radial quadrature weights must be real and positive.")
         if (
             D2.shape != (len(r), len(r))
             or np.iscomplexobj(D2)
@@ -115,3 +89,18 @@ class SphericalKineticEnergy:
         values, single = _orbitals(orbitals, self.orbital_shape, allow_single=True)
         result = self._radial @ values + self._centrifugal * values
         return result[0] if single else result
+
+    def radial_matrix(self, l):
+        """Return an independent nodal radial matrix for 0 <= l <= l_max.
+
+        This includes the centrifugal term and is independent of m. Its
+        Hermitian metric is diag(radial_weights), not the identity.
+        """
+        l = _integer(l, "l")
+        if l > self.l_max:
+            raise ValueError("l cannot exceed l_max.")
+        matrix = self._radial.copy()
+        matrix[np.diag_indices_from(matrix)] += (
+            l * (l + 1) / (2 * self.mass * self.r**2)
+        )
+        return matrix

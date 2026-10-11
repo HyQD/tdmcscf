@@ -8,6 +8,8 @@ available in `tdmcscf.grid.spherical`. See the
 
 The independent [spherical kinetic-energy operator](docs/spherical_kinetic.md)
 supports a configurable particle or reduced mass and the same nodal layout.
+The [central nuclear potential and atomic core Hamiltonian](docs/spherical_atomic_core.md)
+provide nuclear attraction, orbital action, and radial matrices for eigenvalue problems.
 
 ## Requirements
 

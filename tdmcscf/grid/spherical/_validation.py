@@ -1,5 +1,7 @@
 """Shared validation for spherical nodal orbital arrays."""
 
+from numbers import Real
+
 import numpy as np
 
 
@@ -26,3 +28,34 @@ def _orbitals(values, shape, allow_single=False):
     if not np.all(np.isfinite(array)):
         raise ValueError("Orbital values must be finite.")
     return np.asarray(array, dtype=np.complex128), single
+
+
+def _positive_real(value, name):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+        raise TypeError(f"{name} must be a positive finite real scalar.")
+    if not np.isfinite(value) or value <= 0:
+        raise ValueError(f"{name} must be a positive finite real scalar.")
+    return float(value)
+
+
+def _radial_data(radial_grid):
+    """Validate full real radial nodes and their quadrature weights."""
+    r = np.asarray(radial_grid.r)
+    weights = np.asarray(radial_grid.weights)
+    if (
+        r.ndim != 1
+        or len(r) < 3
+        or np.iscomplexobj(r)
+        or not np.all(np.isfinite(r))
+        or r[0] != 0
+        or np.any(np.diff(r) <= 0)
+    ):
+        raise ValueError("The radial grid must be real, increasing, and start at zero.")
+    if (
+        weights.shape != r.shape
+        or np.iscomplexobj(weights)
+        or not np.all(np.isfinite(weights))
+        or np.any(weights <= 0)
+    ):
+        raise ValueError("Radial quadrature weights must be real and positive.")
+    return r, weights
