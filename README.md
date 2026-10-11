@@ -6,6 +6,9 @@ Spherical-coordinate Coulomb mean-field construction and orbital action are
 available in `tdmcscf.grid.spherical`. See the
 [representation conventions and examples](docs/spherical_mean_fields.md).
 
+The independent [spherical kinetic-energy operator](docs/spherical_kinetic.md)
+supports a configurable particle or reduced mass and the same nodal layout.
+
 ## Requirements
 
 Runtime requirements match `HyQD-grid-lib`: Python >=3.12,<3.15,
