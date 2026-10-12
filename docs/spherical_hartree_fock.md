@@ -141,8 +141,10 @@ occupied (l) block. The solver then repeats:
 3. Apply startup damping or commutator DIIS.
 4. Diagonalize each occupied (l) block and select the configured radial
    subshells.
-5. Test the total-energy change and orbital-gradient norm. The latter is
-   represented by the weighted Fock-density commutator norm.
+5. Test the orbital-gradient norm, represented by the weighted Fock-density
+   commutator norm, when `conv_tol_grad` is supplied. If `conv_tol_grad=None`,
+   test the total-energy change against `conv_tol_e` instead. Both diagnostics
+   are recorded at every iteration.
 
 The restricted energy is
 

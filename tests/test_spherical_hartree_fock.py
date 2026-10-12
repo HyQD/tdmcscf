@@ -109,6 +109,36 @@ def test_diis_is_optional():
     assert result.converged
 
 
+def test_gradient_tolerance_takes_precedence_over_energy_tolerance():
+    result = SphericalAtomicHartreeFock(
+        "He",
+        r_max=8,
+        n_elements=2,
+        n_points=7,
+        max_iterations=2,
+        conv_tol_e=1e-300,
+        conv_tol_grad=1e100,
+    ).solve()
+    assert result.converged
+    assert result.iterations == 1
+    assert np.isinf(result.history[-1].energy_change)
+
+
+def test_none_gradient_tolerance_uses_energy_change():
+    result = SphericalAtomicHartreeFock(
+        "He",
+        r_max=8,
+        n_elements=2,
+        n_points=7,
+        max_iterations=2,
+        conv_tol_e=1e100,
+        conv_tol_grad=None,
+    ).solve()
+    assert result.converged
+    assert result.iterations == 2
+    assert np.isfinite(result.history[-1].energy_change)
+
+
 def test_rejects_basis_that_omits_occupied_channels():
     with pytest.raises(ValueError, match="occupied"):
         SphericalAtomicHartreeFock("Ne", r_max=20, n_points=9, m_max=0)

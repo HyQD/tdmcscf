@@ -163,10 +163,14 @@ class SphericalAtomicHartreeFock:
         Largest retained Coulomb multipole. Defaults to twice the largest
         occupied l, which is exact for the occupied atomic Fock blocks.
     conv_tol_e : float, optional
-        Convergence threshold for the absolute change in total energy.
-    conv_tol_grad : float, optional
+        Convergence threshold for the absolute change in total energy. This is
+        used only when ``conv_tol_grad`` is ``None``; the energy change is
+        always recorded in the iteration history.
+    conv_tol_grad : float or None, optional
         Convergence threshold for the orbital-gradient norm, represented by
-        the weighted Fock--density commutator norm.
+        the weighted Fock--density commutator norm. When supplied, this is the
+        sole convergence criterion. Set it to ``None`` to converge on the
+        energy change instead.
     damping : float, optional
         Fraction of the preceding Fock matrix retained before DIIS starts.
     diis : bool, optional
@@ -209,7 +213,11 @@ class SphericalAtomicHartreeFock:
         )
         self.max_iterations = _integer(max_iterations, "max_iterations", minimum=1)
         self.conv_tol_e = _positive_real(conv_tol_e, "conv_tol_e")
-        self.conv_tol_grad = _positive_real(conv_tol_grad, "conv_tol_grad")
+        self.conv_tol_grad = (
+            None
+            if conv_tol_grad is None
+            else _positive_real(conv_tol_grad, "conv_tol_grad")
+        )
         if isinstance(damping, (bool, np.bool_)) or not isinstance(
             damping, (int, float, np.integer, np.floating)
         ):
@@ -426,11 +434,14 @@ class SphericalAtomicHartreeFock:
             history.append(
                 SCFIteration(iteration, energy, energy_change, gradient_norm)
             )
-            if (
-                previous_energy is not None
-                and energy_change < self.conv_tol_e
-                and gradient_norm < self.conv_tol_grad
-            ):
+            if self.conv_tol_grad is not None:
+                has_converged = gradient_norm < self.conv_tol_grad
+            else:
+                has_converged = (
+                    previous_energy is not None
+                    and energy_change < self.conv_tol_e
+                )
+            if has_converged:
                 converged = True
                 _, radial_energies = self._diagonalize(raw_fock, orbitals)
                 break
