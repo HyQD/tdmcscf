@@ -69,7 +69,7 @@ $$
 $$
 
 The discrete Hermiticity condition is $T_l^\dagger S=ST_l$, with
-$S=\operatorname{diag}(w_a)$. The nodal matrix need not be symmetric in the
+$S=\mathrm{diag}(w_a)$. The nodal matrix need not be symmetric in the
 ordinary Euclidean metric. `D2_symmetric` acts in a different coefficient
 representation and is not used here.
 

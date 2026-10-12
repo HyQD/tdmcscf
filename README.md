@@ -11,6 +11,10 @@ supports a configurable particle or reduced mass and the same nodal layout.
 The [central nuclear potential and atomic core Hamiltonian](docs/spherical_atomic_core.md)
 provide nuclear attraction, orbital action, and radial matrices for eigenvalue problems.
 
+The [closed-shell atomic Hartree--Fock solver](docs/spherical_hartree_fock.md)
+uses symmetry-adapted radial Fock blocks, configurable FEM-DVR grids and
+Coulomb multipole truncation, damped SCF iterations, and optional DIIS.
+
 ## Requirements
 
 Runtime requirements match `HyQD-grid-lib`: Python >=3.12,<3.15,
