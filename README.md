@@ -15,12 +15,17 @@ The [closed-shell atomic Hartree--Fock solver](docs/spherical_hartree_fock.md)
 uses symmetry-adapted radial Fock blocks, configurable FEM-DVR grids and
 Coulomb multipole truncation, damped SCF iterations, and optional DIIS.
 
+The [electric-dipole field operators](docs/spherical_dipole_fields.md) apply
+length- and velocity-gauge interactions with arbitrary Cartesian polarization
+and sums of temporal profiles from `electromagnetic_fields`.
+
 ## Requirements
 
 Runtime requirements match `HyQD-grid-lib`: Python >=3.12,<3.15,
 NumPy >=2.5.2,<2.6, SciPy >=1.18.0,<1.19, and Numba >=0.67.0,<0.68,
 along with opt-einsum, SymPy, packaging, tqdm, and Matplotlib.
 `HyQD-grid-lib>=1.1.0` is also a runtime dependency.
+Temporal field profiles are provided by `HyQD-electromagnetic-fields`.
 
 ## Installation
 
