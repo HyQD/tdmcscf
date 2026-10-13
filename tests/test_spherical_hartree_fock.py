@@ -139,6 +139,39 @@ def test_none_gradient_tolerance_uses_energy_change():
     assert np.isfinite(result.history[-1].energy_change)
 
 
+def test_poisson_linear_algebra_method_is_selectable():
+    common = {
+        "nodes": [0, 2, 5, 10],
+        "n_points": 9,
+        "max_iterations": 30,
+    }
+    inverse = SphericalAtomicHartreeFock(
+        "He", **common, poisson_method="inverse"
+    )
+    direct = SphericalAtomicHartreeFock("He", **common, poisson_method="solve")
+
+    np.testing.assert_allclose(
+        direct.radial_coulomb,
+        inverse.radial_coulomb,
+        atol=1e-12,
+        rtol=1e-12,
+    )
+    result = direct.solve()
+    assert result.converged
+    assert result.poisson_method == "solve"
+
+
+def test_rejects_unknown_poisson_method():
+    with pytest.raises(ValueError, match="inverse.*solve"):
+        SphericalAtomicHartreeFock(
+            "He",
+            r_max=8,
+            n_elements=2,
+            n_points=7,
+            poisson_method="unknown",
+        )
+
+
 def test_rejects_basis_that_omits_occupied_channels():
     with pytest.raises(ValueError, match="occupied"):
         SphericalAtomicHartreeFock("Ne", r_max=20, n_points=9, m_max=0)

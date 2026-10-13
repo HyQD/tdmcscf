@@ -49,6 +49,7 @@ class AtomicHartreeFockResult:
     l_max: int
     m_max: int
     coulomb_l_max: int
+    poisson_method: str
 
 
 class _DIIS:
@@ -162,6 +163,10 @@ class SphericalAtomicHartreeFock:
     coulomb_l_max : int, optional
         Largest retained Coulomb multipole. Defaults to twice the largest
         occupied l, which is exact for the occupied atomic Fock blocks.
+    poisson_method : {"inverse", "solve"}, optional
+        Linear-algebra method used by grid-lib to construct the radial
+        Coulomb matrices from the Poisson equation. Defaults to ``"inverse"``
+        for backward compatibility.
     conv_tol_e : float, optional
         Convergence threshold for the absolute change in total energy. This is
         used only when ``conv_tol_grad`` is ``None``; the energy change is
@@ -188,6 +193,7 @@ class SphericalAtomicHartreeFock:
         l_max=None,
         m_max=None,
         coulomb_l_max=None,
+        poisson_method="inverse",
         mass=1.0,
         max_iterations=100,
         conv_tol_e=1e-10,
@@ -211,6 +217,7 @@ class SphericalAtomicHartreeFock:
             if coulomb_l_max is None
             else _integer(coulomb_l_max, "coulomb_l_max")
         )
+        self.poisson_method = poisson_method
         self.max_iterations = _integer(max_iterations, "max_iterations", minimum=1)
         self.conv_tol_e = _positive_real(conv_tol_e, "conv_tol_e")
         self.conv_tol_grad = (
@@ -248,7 +255,11 @@ class SphericalAtomicHartreeFock:
         self.radial_weights = self.core.radial_weights
         self.orbital_lm = self.core.orbital_lm
         self.orbital_shape = self.core.orbital_shape
-        self.radial_coulomb = radial_Coulomb(self.grid, self.coulomb_l_max + 1)
+        self.radial_coulomb = radial_Coulomb(
+            self.grid,
+            self.coulomb_l_max + 1,
+            method=self.poisson_method,
+        )
         grouped = {}
         for subshell in self.configuration.subshells:
             grouped.setdefault(subshell.l, []).append(subshell)
@@ -485,4 +496,5 @@ class SphericalAtomicHartreeFock:
             l_max=self.l_max,
             m_max=self.m_max,
             coulomb_l_max=self.coulomb_l_max,
+            poisson_method=self.poisson_method,
         )

@@ -33,6 +33,7 @@ solver = SphericalAtomicHartreeFock(
     diis=True,
     diis_start=3,
     diis_size=8,
+    poisson_method="solve"
 )
 result = solver.solve()
 last_iteration = result.history[-1]
