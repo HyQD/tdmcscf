@@ -130,6 +130,9 @@ not determine which orbitals are occupied.
 Coulomb expansion. Its default is twice the largest occupied (l), which
 retains every direct and exchange multipole needed by the occupied atomic Fock
 blocks. A smaller explicit value deliberately defines a truncated interaction.
+The `poisson_method` argument selects whether grid-lib constructs the radial
+Coulomb response with an explicit matrix inverse (`"inverse"`, the default)
+or a direct multi-right-hand-side linear solve (`"solve"`).
 
 ## SCF iteration and result
 
@@ -163,6 +166,7 @@ solver = SphericalAtomicHartreeFock(
     "Ne",
     nodes=[0.0, 0.3, 1.0, 3.0, 7.0, 15.0, 30.0],
     n_points=17,
+    poisson_method="solve",
     max_iterations=100,
     conv_tol_e=1e-10,
     conv_tol_grad=1e-8,
