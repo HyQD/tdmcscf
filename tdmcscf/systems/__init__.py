@@ -6,10 +6,24 @@ from .atoms import (
     atomic_configurations,
     closed_shell_atom,
 )
+from .spherical import (
+    Atomic,
+    ClosedShellOccupation,
+    CustomCentralPotential,
+    GaussianWell,
+    HarmonicOscillator,
+    SphericalElectronicSystem,
+)
 
 __all__ = [
+    "Atomic",
     "AtomicConfiguration",
+    "ClosedShellOccupation",
     "ClosedSubshell",
+    "CustomCentralPotential",
+    "GaussianWell",
+    "HarmonicOscillator",
+    "SphericalElectronicSystem",
     "atomic_configurations",
     "closed_shell_atom",
 ]

@@ -1,4 +1,4 @@
-"""Symmetry-adapted restricted Hartree--Fock for closed-shell atoms."""
+"""Symmetry-adapted restricted Hartree--Fock for central potentials."""
 
 from dataclasses import dataclass
 
@@ -15,10 +15,15 @@ from grid_lib.spherical_coordinates.angular_momentum import (
 )
 from grid_lib.spherical_coordinates.radial_Coulomb import radial_Coulomb
 
-from tdmcscf.systems import AtomicConfiguration, closed_shell_atom
+from tdmcscf.systems import (
+    Atomic,
+    AtomicConfiguration,
+    SphericalElectronicSystem,
+    closed_shell_atom,
+)
 
 from ._validation import _integer, _positive_real
-from .atomic_core import AtomicCoreHamiltonian
+from .atomic_core import AtomicCoreHamiltonian, SphericalCoreHamiltonian
 
 
 @dataclass(frozen=True)
@@ -32,10 +37,10 @@ class SCFIteration:
 
 
 @dataclass
-class AtomicHartreeFockResult:
-    """Converged state and diagnostics from an atomic RHF calculation."""
+class HartreeFockResult:
+    """Converged state and diagnostics from a spherical RHF calculation."""
 
-    configuration: AtomicConfiguration
+    system: SphericalElectronicSystem
     grid: FEMDVR
     energy: float
     orbital_energies: np.ndarray
@@ -50,6 +55,13 @@ class AtomicHartreeFockResult:
     m_max: int
     coulomb_l_max: int
     poisson_method: str
+
+
+@dataclass
+class AtomicHartreeFockResult(HartreeFockResult):
+    """Atomic RHF result retaining the spectroscopic configuration."""
+
+    configuration: AtomicConfiguration
 
 
 class _DIIS:
@@ -83,8 +95,10 @@ class _DIIS:
         }
 
 
-def make_atomic_femdvr_grid(*, r_max=None, nodes=None, n_elements=None, n_points=15):
-    """Construct the fixed real FEM-DVR grid used by the atomic solver.
+def make_spherical_femdvr_grid(
+    *, r_max=None, nodes=None, n_elements=None, n_points=15
+):
+    """Construct the fixed real FEM-DVR grid used by spherical solvers.
 
     Supply explicit element-boundary ``nodes`` or let the function generate
     uniform boundaries from ``r_max`` and ``n_elements``. If explicit nodes
@@ -142,8 +156,12 @@ def make_atomic_femdvr_grid(*, r_max=None, nodes=None, n_elements=None, n_points
     )
 
 
-class SphericalAtomicHartreeFock:
-    r"""Restricted Hartree--Fock for a spherical closed-shell atom or ion.
+# Preserve the established atomic helper name.
+make_atomic_femdvr_grid = make_spherical_femdvr_grid
+
+
+class SphericalHartreeFock:
+    r"""Restricted Hartree--Fock for a closed-shell central-potential system.
 
     The occupied subshells are constrained to share one radial orbital over
     all ``m=-l,...,l``. The rotationally invariant Fock operator is assembled
@@ -153,10 +171,10 @@ class SphericalAtomicHartreeFock:
 
     Parameters
     ----------
-    atom : str or AtomicConfiguration
-        Built-in label or explicit closed-shell configuration.
+    system : SphericalElectronicSystem
+        Central potential, particle mass, and complete-shell occupation.
     r_max, nodes, n_elements, n_points
-        FEM-DVR controls accepted by :func:`make_atomic_femdvr_grid`.
+        FEM-DVR controls accepted by :func:`make_spherical_femdvr_grid`.
     l_max, m_max : int, optional
         Returned spherical-harmonic basis. Both must include every occupied
         magnetic sublevel. Defaults to the largest occupied l.
@@ -184,7 +202,7 @@ class SphericalAtomicHartreeFock:
 
     def __init__(
         self,
-        atom,
+        system,
         *,
         r_max=None,
         nodes=None,
@@ -194,7 +212,6 @@ class SphericalAtomicHartreeFock:
         m_max=None,
         coulomb_l_max=None,
         poisson_method="inverse",
-        mass=1.0,
         max_iterations=100,
         conv_tol_e=1e-10,
         conv_tol_grad=1e-8,
@@ -203,8 +220,10 @@ class SphericalAtomicHartreeFock:
         diis_start=3,
         diis_size=8,
     ):
-        self.configuration = closed_shell_atom(atom)
-        occupied_l_max = self.configuration.occupied_l_max
+        if not isinstance(system, SphericalElectronicSystem):
+            raise TypeError("system must be a SphericalElectronicSystem.")
+        self.system = system
+        occupied_l_max = self.system.occupied_l_max
         self.l_max = occupied_l_max if l_max is None else _integer(l_max, "l_max")
         self.m_max = self.l_max if m_max is None else _integer(m_max, "m_max")
         if self.l_max < occupied_l_max or self.m_max < occupied_l_max:
@@ -238,19 +257,13 @@ class SphericalAtomicHartreeFock:
         self.diis_start = _integer(diis_start, "diis_start", minimum=1)
         self.diis_size = _integer(diis_size, "diis_size", minimum=2)
 
-        self.grid = make_atomic_femdvr_grid(
+        self.grid = make_spherical_femdvr_grid(
             r_max=r_max,
             nodes=nodes,
             n_elements=n_elements,
             n_points=n_points,
         )
-        self.core = AtomicCoreHamiltonian(
-            self.grid,
-            self.l_max,
-            self.m_max,
-            Z=self.configuration.nuclear_charge,
-            mass=mass,
-        )
+        self.core = self._make_core()
         self.r = self.core.r
         self.radial_weights = self.core.radial_weights
         self.orbital_lm = self.core.orbital_lm
@@ -260,14 +273,23 @@ class SphericalAtomicHartreeFock:
             self.coulomb_l_max + 1,
             method=self.poisson_method,
         )
-        grouped = {}
-        for subshell in self.configuration.subshells:
-            grouped.setdefault(subshell.l, []).append(subshell)
-        self._subshells_by_l = {
-            l: tuple(sorted(subshells)) for l, subshells in grouped.items()
-        }
-        self._occupied_l = tuple(sorted(self._subshells_by_l))
+        self._counts_by_l = dict(self.system.occupation.radial_orbitals_per_l)
+        self._occupied_l = tuple(self._counts_by_l)
         self._sqrt_weights = np.sqrt(self.radial_weights)
+
+    def _make_core(self):
+        return SphericalCoreHamiltonian(
+            self.grid,
+            self.l_max,
+            self.m_max,
+            potential=self.system.potential,
+            mass=self.system.mass,
+        )
+
+    def _result_metadata(self):
+        return {}
+
+    result_type = HartreeFockResult
 
     def _to_symmetric(self, matrix):
         transformed = self._sqrt_weights[:, None] * matrix / self._sqrt_weights[None, :]
@@ -275,12 +297,12 @@ class SphericalAtomicHartreeFock:
 
     def _initial_orbitals(self):
         orbitals = {}
-        for l, subshells in self._subshells_by_l.items():
+        for l, count in self._counts_by_l.items():
             values, vectors = np.linalg.eigh(
                 self._to_symmetric(self.core.radial_matrix(l))
             )
             del values
-            orbitals[l] = vectors[:, : len(subshells)].T
+            orbitals[l] = vectors[:, :count].T
         return orbitals
 
     def fock_matrices(self, radial_orbitals):
@@ -292,9 +314,9 @@ class SphericalAtomicHartreeFock:
         matrix; the complete-shell sum makes every block independent of m.
         """
         checked = {}
-        for l, subshells in self._subshells_by_l.items():
+        for l, count in self._counts_by_l.items():
             values = np.asarray(radial_orbitals[l])
-            expected = (len(subshells), len(self.r))
+            expected = (count, len(self.r))
             if values.shape != expected:
                 raise ValueError(f"radial_orbitals[{l}] must have shape {expected}.")
             if not np.issubdtype(values.dtype, np.number) or not np.all(
@@ -410,18 +432,21 @@ class SphericalAtomicHartreeFock:
         return updated, energies
 
     def _expanded_result(self, radial, radial_energies):
+        labels_by_l = {l: [] for l in self._occupied_l}
+        for label, l in self.system.radial_orbital_labels:
+            labels_by_l[l].append(label)
         rows = {
-            (subshell.n, l): i
-            for l, subshells in self._subshells_by_l.items()
-            for i, subshell in enumerate(subshells)
+            (label, l): i
+            for l, labels in labels_by_l.items()
+            for i, label in enumerate(labels)
         }
         orbitals = np.zeros(
-            (self.configuration.n_doubly_occupied, *self.orbital_shape),
+            (self.system.n_doubly_occupied, *self.orbital_shape),
             dtype=np.complex128,
         )
         energies = []
-        for p, (n, l, m) in enumerate(self.configuration.orbital_quantum_numbers):
-            row = rows[n, l]
+        for p, (label, l, m) in enumerate(self.system.orbital_quantum_numbers):
+            row = rows[label, l]
             channel = int(LM_to_I(l, m, self.l_max, self.m_max))
             orbitals[p, :, channel] = radial[l][row]
             energies.append(radial_energies[l][row])
@@ -481,13 +506,13 @@ class SphericalAtomicHartreeFock:
             l: values / self._sqrt_weights[None, :] for l, values in orbitals.items()
         }
         expanded, energies = self._expanded_result(radial, radial_energies)
-        return AtomicHartreeFockResult(
-            configuration=self.configuration,
+        return self.result_type(
+            system=self.system,
             grid=self.grid,
             energy=history[-1].energy,
             orbital_energies=energies,
             orbitals=expanded,
-            orbital_quantum_numbers=self.configuration.orbital_quantum_numbers,
+            orbital_quantum_numbers=self.system.orbital_quantum_numbers,
             radial_orbitals=radial,
             radial_orbital_energies=radial_energies,
             converged=converged,
@@ -497,4 +522,65 @@ class SphericalAtomicHartreeFock:
             m_max=self.m_max,
             coulomb_l_max=self.coulomb_l_max,
             poisson_method=self.poisson_method,
+            **self._result_metadata(),
         )
+
+
+class SphericalAtomicHartreeFock(SphericalHartreeFock):
+    """Backward-compatible restricted HF solver for closed-shell atoms."""
+
+    result_type = AtomicHartreeFockResult
+
+    def __init__(
+        self,
+        atom,
+        *,
+        charge=None,
+        r_max=None,
+        nodes=None,
+        n_elements=None,
+        n_points=15,
+        l_max=None,
+        m_max=None,
+        coulomb_l_max=None,
+        poisson_method="inverse",
+        mass=1.0,
+        max_iterations=100,
+        conv_tol_e=1e-10,
+        conv_tol_grad=1e-8,
+        damping=0.2,
+        diis=True,
+        diis_start=3,
+        diis_size=8,
+    ):
+        self.configuration = closed_shell_atom(atom, charge=charge)
+        super().__init__(
+            Atomic(self.configuration, mass=mass),
+            r_max=r_max,
+            nodes=nodes,
+            n_elements=n_elements,
+            n_points=n_points,
+            l_max=l_max,
+            m_max=m_max,
+            coulomb_l_max=coulomb_l_max,
+            poisson_method=poisson_method,
+            max_iterations=max_iterations,
+            conv_tol_e=conv_tol_e,
+            conv_tol_grad=conv_tol_grad,
+            damping=damping,
+            diis=diis,
+            diis_start=diis_start,
+            diis_size=diis_size,
+        )
+
+    def _make_core(self):
+        return AtomicCoreHamiltonian(
+            self.grid,
+            self.l_max,
+            self.m_max,
+            Z=self.configuration.nuclear_charge,
+            mass=self.system.mass,
+        )
+
+    def _result_metadata(self):
+        return {"configuration": self.configuration}

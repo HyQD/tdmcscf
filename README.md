@@ -11,9 +11,10 @@ supports a configurable particle or reduced mass and the same nodal layout.
 The [central nuclear potential and atomic core Hamiltonian](docs/spherical_atomic_core.md)
 provide nuclear attraction, orbital action, and radial matrices for eigenvalue problems.
 
-The [closed-shell atomic Hartree--Fock solver](docs/spherical_hartree_fock.md)
-uses symmetry-adapted radial Fock blocks, configurable FEM-DVR grids and
-Coulomb multipole truncation, damped SCF iterations, and optional DIIS.
+The [closed-shell spherical systems](docs/spherical_systems.md) support atomic,
+harmonic-oscillator, Gaussian-well, and custom central potentials. The
+[atomic Hartree--Fock interface](docs/spherical_hartree_fock.md) is retained as
+a convenience wrapper around the general symmetry-adapted radial solver.
 
 The [electric-dipole field operators](docs/spherical_dipole_fields.md) apply
 length- and velocity-gauge interactions with arbitrary Cartesian polarization
