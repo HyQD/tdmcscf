@@ -1,6 +1,6 @@
 # Restricted TDHF in spherical coordinates
 
-`SphericalRestrictedTDHF` supplies the closed-shell Fock action and the two
+`SphericalRestrictedTDHF` supplies the low-level closed-shell Fock action and the two
 right-hand sides used by a split time integrator. For occupied spatial
 orbitals, the Fock action is
 
@@ -8,7 +8,7 @@ $$
 F\phi_p=h(t)\phi_p+\sum_j(2J_j-K_j)\phi_p.
 $$
 
-The one-body part $h(t)$ contains the atomic core and an optional electric-
+The one-body part $h(t)$ contains the central core and an optional electric-
 dipole interaction. It is exposed through `linear_rhs` for implicit
 Crank--Nicolson propagation. The Coulomb contribution is rebuilt from the
 current orbitals whenever `nonlinear_rhs` is evaluated, including every RK4
@@ -67,3 +67,8 @@ reused for all occupied orbitals and Krylov iterations. For an outer
 The complete example in `examples/tdhf_atom.py` constructs a Hartree--Fock
 ground state, applies a one-cycle linearly $z$-polarized sine-square pulse,
 and records each spatial orbital's $z$ expectation value and norm.
+
+For calculation setup and propagation, use the
+[high-level `SphericalTDHF` interface](spherical_tdhf_interface.md). It builds
+these operators from a spherical system and exposes fields, integrators,
+sampling, masks, and checkpoints through one configuration object.

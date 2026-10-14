@@ -63,6 +63,8 @@ $$
 
 The polarization is not normalized automatically. Its magnitude can carry a
 relative amplitude when several fields are combined.
+The high-level `SphericalTDHF` interface instead normalizes each polarization
+so that physical field strengths remain entirely in the temporal profiles.
 
 ## Independent components
 

@@ -76,7 +76,9 @@ W00 = fields.multipoles((0, 0))  # (n_LM, n_r)
 action = fields.apply(orbitals, (0, 0))  # same shape as orbitals
 ```
 
-Reuse the builder as orbitals change: `fields = builder.build(new_orbitals)`.
+Set `poisson_method="inverse"` or `poisson_method="solve"` when constructing
+the builder to select grid-lib's radial Poisson linear-algebra path. Reuse the
+builder as orbitals change: `fields = builder.build(new_orbitals)`.
 It caches angular tables and radial response matrices. A field result keeps
 the potentials from that build; later builds do not update previous results.
 
