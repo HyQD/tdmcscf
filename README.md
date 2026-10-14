@@ -20,6 +20,10 @@ The [electric-dipole field operators](docs/spherical_dipole_fields.md) apply
 length- and velocity-gauge interactions with arbitrary Cartesian polarization
 and sums of temporal profiles from `electromagnetic_fields`.
 
+The [high-level spherical TDHF interface](docs/spherical_tdhf_interface.md)
+configures ground-state initialization, fields, Strang2 or RK4 propagation,
+sampling, radial masks, and restartable checkpoints.
+
 ## Requirements
 
 Runtime requirements match `HyQD-grid-lib`: Python >=3.12,<3.15,

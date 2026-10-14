@@ -58,6 +58,8 @@ class SphericalMeanFieldBuilder:
         Largest retained Coulomb multipole degree and absolute order.
         Defaults are ``L_max = 2*l_max`` and ``M_max = 2*m_max``. Deliberately
         smaller values truncate the Coulomb expansion.
+    poisson_method : {"inverse", "solve"}, optional
+        Linear-algebra method used to construct the radial Coulomb response.
     angular_grid : GaussLegendreFourierGrid, optional
         Default: ``from_bandlimit(2*l_max)``. A supplied grid must have at
         least ``2*l_max+1`` polar and ``4*m_max+1`` azimuthal nodes, sufficient
@@ -85,6 +87,7 @@ class SphericalMeanFieldBuilder:
         L_max=None,
         M_max=None,
         angular_grid=None,
+        poisson_method="inverse",
     ):
         self.l_max = _integer(l_max, "l_max")
         self.m_max = self.l_max if m_max is None else _integer(m_max, "m_max")
@@ -102,6 +105,9 @@ class SphericalMeanFieldBuilder:
             raise ValueError("M_max cannot exceed L_max.")
         if self.M_max > 2 * self.m_max:
             raise ValueError("M_max cannot exceed 2*m_max.")
+        if poisson_method not in {"inverse", "solve"}:
+            raise ValueError("poisson_method must be 'inverse' or 'solve'.")
+        self.poisson_method = poisson_method
 
         r = np.asarray(radial_grid.r)
         weights = np.asarray(radial_grid.weights)
@@ -154,7 +160,11 @@ class SphericalMeanFieldBuilder:
         self.orbital_lm = self._orbital_transform.channels
         self.multipole_lm = self._field_transform.channels
         self.orbital_shape = (len(self.r), len(self.orbital_lm))
-        self.radial_matrices = radial_Coulomb(radial_grid, self.L_max + 1)
+        self.radial_matrices = radial_Coulomb(
+            radial_grid,
+            self.L_max + 1,
+            method=self.poisson_method,
+        )
         self._indices_by_l = tuple(
             np.array(
                 [k for k, (degree, _) in enumerate(self.multipole_lm) if degree == L]

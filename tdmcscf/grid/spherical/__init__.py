@@ -19,6 +19,13 @@ from .preconditioners import (
     ShiftedSphericalCorePreconditioner,
 )
 from .tdhf import SphericalRestrictedTDHF
+from .interface import (
+    RadialCosineMask,
+    SphericalTDHF,
+    TDHFCheckpoint,
+    TDHFResult,
+    estimate_rk4_time_step,
+)
 
 __all__ = [
     "AtomicCoreHamiltonian",
@@ -37,7 +44,12 @@ __all__ = [
     "SphericalMeanFieldBuilder",
     "SphericalRadialPotential",
     "SphericalRestrictedTDHF",
+    "SphericalTDHF",
     "SphericalKineticEnergy",
     "make_atomic_femdvr_grid",
     "make_spherical_femdvr_grid",
+    "RadialCosineMask",
+    "TDHFCheckpoint",
+    "TDHFResult",
+    "estimate_rk4_time_step",
 ]

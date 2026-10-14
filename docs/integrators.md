@@ -80,7 +80,7 @@ SciPy `LinearOperator` or a callable accepting and returning the original
 state shape. The latter form lets a coordinate representation apply its own
 block solves without exposing those details to the integrator.
 
-For spherical atomic calculations, an appropriate preconditioner
+For spherical central-potential calculations, an appropriate preconditioner
 approximately applies
 
 $$
