@@ -1,6 +1,7 @@
 """Closed-shell atomic and ionic configurations."""
 
 from dataclasses import dataclass
+from numbers import Integral
 from types import MappingProxyType
 
 
@@ -142,16 +143,50 @@ def atomic_configurations():
     return MappingProxyType(_CONFIGURATIONS)
 
 
-def closed_shell_atom(atom):
-    """Resolve a catalog label or validate an explicit configuration."""
+def closed_shell_atom(atom, *, charge=None):
+    """Resolve a closed-shell catalog entry.
+
+    ``atom`` may be a catalog label, an explicit ``AtomicConfiguration``, or
+    an integer nuclear charge. A numeric nuclear charge selects the neutral
+    system unless ``charge`` is supplied.
+    """
     if isinstance(atom, AtomicConfiguration):
+        if charge is not None and charge != atom.charge:
+            raise ValueError("charge does not match the explicit configuration.")
         return atom
-    if not isinstance(atom, str):
-        raise TypeError("atom must be a configuration or catalog label.")
-    try:
-        return _CONFIGURATIONS[atom]
-    except KeyError as error:
-        available = ", ".join(_CONFIGURATIONS)
-        raise ValueError(
-            f"Unknown closed-shell atom or ion {atom!r}: {available}."
-        ) from error
+    if isinstance(atom, bool) or not isinstance(atom, (str, Integral)):
+        raise TypeError(
+            "atom must be a configuration, catalog label, or integer nuclear charge."
+        )
+    if isinstance(atom, str):
+        try:
+            configuration = _CONFIGURATIONS[atom]
+        except KeyError as error:
+            available = ", ".join(_CONFIGURATIONS)
+            raise ValueError(
+                f"Unknown closed-shell atom or ion {atom!r}: {available}."
+            ) from error
+        if charge is not None and charge != configuration.charge:
+            raise ValueError("charge does not match the catalog configuration.")
+        return configuration
+
+    atom = int(atom)
+    if atom <= 0:
+        raise ValueError("nuclear charge must be positive.")
+    if charge is None:
+        charge = 0
+    if isinstance(charge, bool) or not isinstance(charge, Integral):
+        raise TypeError("charge must be an integer.")
+    charge = int(charge)
+    matches = [
+        configuration
+        for configuration in _CONFIGURATIONS.values()
+        if configuration.nuclear_charge == atom and configuration.charge == charge
+    ]
+    if len(matches) == 1:
+        return matches[0]
+    available = ", ".join(_CONFIGURATIONS)
+    raise ValueError(
+        f"No built-in closed-shell configuration for Z={atom}, charge={charge}: "
+        f"{available}. Supply an explicit occupation through Atomic instead."
+    )

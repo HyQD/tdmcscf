@@ -4,11 +4,11 @@ import numpy as np
 from scipy.linalg import lu_factor, lu_solve
 
 from ._validation import _orbitals, _positive_real
-from .atomic_core import AtomicCoreHamiltonian
+from .atomic_core import SphericalCoreHamiltonian
 
 
-class ShiftedAtomicCorePreconditioner:
-    r"""Apply angular-channel solves for a shifted atomic core operator.
+class ShiftedSphericalCorePreconditioner:
+    r"""Apply angular-channel solves for a shifted central core operator.
 
     This approximates the inverse Crank--Nicolson matrix by
 
@@ -20,8 +20,8 @@ class ShiftedAtomicCorePreconditioner:
     """
 
     def __init__(self, core, step_size):
-        if not isinstance(core, AtomicCoreHamiltonian):
-            raise TypeError("core must be an AtomicCoreHamiltonian.")
+        if not isinstance(core, SphericalCoreHamiltonian):
+            raise TypeError("core must be a SphericalCoreHamiltonian.")
         self.core = core
         self.step_size = _positive_real(step_size, "step_size")
         identity = np.eye(len(core.r), dtype=np.complex128)
@@ -41,3 +41,7 @@ class ShiftedAtomicCorePreconditioner:
                 self._factors[l], values[:, :, channel].T
             ).T
         return result[0] if single else result
+
+
+class ShiftedAtomicCorePreconditioner(ShiftedSphericalCorePreconditioner):
+    """Backward-compatible name for the shifted spherical-core preconditioner."""

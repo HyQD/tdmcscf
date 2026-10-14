@@ -1,31 +1,43 @@
 """Spherical-coordinate tools for nodal reduced radial orbitals."""
 
-from .atomic_core import AtomicCoreHamiltonian
+from .atomic_core import AtomicCoreHamiltonian, SphericalCoreHamiltonian
 from .dipole_fields import DipoleFieldTerm, SphericalDipoleField
 from .hartree_fock import (
     AtomicHartreeFockResult,
+    HartreeFockResult,
     SCFIteration,
     SphericalAtomicHartreeFock,
+    SphericalHartreeFock,
     make_atomic_femdvr_grid,
+    make_spherical_femdvr_grid,
 )
 from .kinetic import SphericalKineticEnergy
 from .mean_fields import MeanFieldPotential, SphericalMeanFieldBuilder
-from .potentials import SphericalCoulombPotential
-from .preconditioners import ShiftedAtomicCorePreconditioner
+from .potentials import SphericalCoulombPotential, SphericalRadialPotential
+from .preconditioners import (
+    ShiftedAtomicCorePreconditioner,
+    ShiftedSphericalCorePreconditioner,
+)
 from .tdhf import SphericalRestrictedTDHF
 
 __all__ = [
     "AtomicCoreHamiltonian",
     "AtomicHartreeFockResult",
     "DipoleFieldTerm",
+    "HartreeFockResult",
     "MeanFieldPotential",
     "SCFIteration",
-    "SphericalCoulombPotential",
-    "SphericalDipoleField",
+    "ShiftedAtomicCorePreconditioner",
+    "ShiftedSphericalCorePreconditioner",
     "SphericalAtomicHartreeFock",
+    "SphericalCoulombPotential",
+    "SphericalCoreHamiltonian",
+    "SphericalDipoleField",
+    "SphericalHartreeFock",
     "SphericalMeanFieldBuilder",
+    "SphericalRadialPotential",
     "SphericalRestrictedTDHF",
     "SphericalKineticEnergy",
-    "ShiftedAtomicCorePreconditioner",
     "make_atomic_femdvr_grid",
+    "make_spherical_femdvr_grid",
 ]

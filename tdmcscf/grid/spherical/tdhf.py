@@ -3,7 +3,7 @@ r"""Restricted time-dependent Hartree--Fock actions in spherical coordinates."""
 import numpy as np
 
 from ._validation import _orbitals
-from .atomic_core import AtomicCoreHamiltonian
+from .atomic_core import SphericalCoreHamiltonian
 from .dipole_fields import SphericalDipoleField
 from .mean_fields import SphericalMeanFieldBuilder
 
@@ -13,8 +13,8 @@ class SphericalRestrictedTDHF:
 
     Parameters
     ----------
-    core : AtomicCoreHamiltonian
-        Time-independent kinetic and central nuclear operator.
+    core : SphericalCoreHamiltonian
+        Time-independent kinetic and central-potential operator.
     mean_fields : SphericalMeanFieldBuilder
         Builder whose orbital channels match ``core``. Its ``L_max`` and
         ``M_max`` determine the electron--electron Coulomb truncation.
@@ -50,8 +50,8 @@ class SphericalRestrictedTDHF:
         orbital_gauge="orthogonal",
         orbital_m=None,
     ):
-        if not isinstance(core, AtomicCoreHamiltonian):
-            raise TypeError("core must be an AtomicCoreHamiltonian.")
+        if not isinstance(core, SphericalCoreHamiltonian):
+            raise TypeError("core must be a SphericalCoreHamiltonian.")
         if not isinstance(mean_fields, SphericalMeanFieldBuilder):
             raise TypeError("mean_fields must be a SphericalMeanFieldBuilder.")
         if mean_fields.orbital_shape != core.orbital_shape:
@@ -125,7 +125,7 @@ class SphericalRestrictedTDHF:
         ).real
 
     def one_body_action(self, orbitals, time):
-        """Apply the atomic core and optional dipole interaction."""
+        """Apply the central core and optional dipole interaction."""
         values = self._orbitals(orbitals)
         result = self.core.apply(values)
         if self.dipole_field is not None:
