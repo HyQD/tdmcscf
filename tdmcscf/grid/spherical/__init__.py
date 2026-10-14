@@ -11,6 +11,8 @@ from .hartree_fock import (
 from .kinetic import SphericalKineticEnergy
 from .mean_fields import MeanFieldPotential, SphericalMeanFieldBuilder
 from .potentials import SphericalCoulombPotential
+from .preconditioners import ShiftedAtomicCorePreconditioner
+from .tdhf import SphericalRestrictedTDHF
 
 __all__ = [
     "AtomicCoreHamiltonian",
@@ -22,6 +24,8 @@ __all__ = [
     "SphericalDipoleField",
     "SphericalAtomicHartreeFock",
     "SphericalMeanFieldBuilder",
+    "SphericalRestrictedTDHF",
     "SphericalKineticEnergy",
+    "ShiftedAtomicCorePreconditioner",
     "make_atomic_femdvr_grid",
 ]

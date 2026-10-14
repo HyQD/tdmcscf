@@ -95,6 +95,62 @@ def test_channel_order_and_restricted_m_match_grid_lib(radial_grid):
         fields.multipoles((0, 1))
 
 
+def test_explicit_coulomb_cutoffs_truncate_multipoles(radial_grid):
+    full = SphericalMeanFieldBuilder(radial_grid, l_max=2, m_max=1)
+    truncated = SphericalMeanFieldBuilder(
+        radial_grid,
+        l_max=2,
+        m_max=1,
+        L_max=2,
+        M_max=1,
+    )
+    assert truncated.L_max == 2
+    assert truncated.M_max == 1
+    assert len(truncated.radial_matrices) == 3
+    assert truncated.multipole_lm == tuple(
+        (L, M) for M in range(-1, 2) for L in range(abs(M), 3)
+    )
+
+    orbitals = random_orbitals(full)
+    full_fields = full.build(orbitals, pairs=[(0, 1)])
+    truncated_fields = truncated.build(orbitals, pairs=[(0, 1)])
+    selected = [full.multipole_lm.index(channel) for channel in truncated.multipole_lm]
+    np.testing.assert_allclose(
+        truncated_fields.coefficients[0],
+        full_fields.coefficients[0, selected],
+        atol=2e-13,
+    )
+
+
+def test_fixed_m_pair_beyond_M_max_is_projected_out(radial_grid):
+    builder = SphericalMeanFieldBuilder(
+        radial_grid,
+        l_max=2,
+        m_max=1,
+        L_max=2,
+        M_max=1,
+    )
+    orbitals, magnetic = fixed_m_orbitals(builder)
+    fields = builder.build(orbitals, pairs=[(0, 2)], orbital_m=magnetic)
+    np.testing.assert_array_equal(fields.coefficients, 0)
+    np.testing.assert_array_equal(
+        fields.apply(orbitals[0], (0, 2), orbital_m=-1), 0
+    )
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"L_max": 5},
+        {"L_max": 2, "M_max": 3},
+        {"m_max": 1, "M_max": 3},
+    ],
+)
+def test_rejects_invalid_coulomb_cutoffs(radial_grid, kwargs):
+    with pytest.raises(ValueError):
+        SphericalMeanFieldBuilder(radial_grid, l_max=2, **kwargs)
+
+
 @pytest.mark.parametrize("pair", [(0, 1), (1, 0), (2, 2)])
 def test_general_action_matches_independent_gaunt_contraction(builder, pair):
     source = random_orbitals(builder)
