@@ -103,8 +103,9 @@ solver = SphericalHartreeFock(
 result = solver.solve()
 ```
 
-A complete runnable version is available in
-[`examples/rhf_harmonic_oscillator.py`](../examples/rhf_harmonic_oscillator.py).
+Complete runnable examples are available for the
+[harmonic oscillator](../examples/rhf_harmonic_oscillator.py) and
+[Gaussian well](../examples/rhf_gaussian_well.py).
 
 `SphericalAtomicHartreeFock` remains available with its existing interface and
 returns an `AtomicHartreeFockResult` containing the original
