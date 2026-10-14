@@ -25,8 +25,9 @@ $$
 
 `builder.orbital_lm` gives each orbital channel's `(l, m)`. The order is
 M-major, matching `grid_lib.spherical_coordinates.angular_momentum.LM_to_I`.
-`builder.multipole_lm` gives the field channels, which extend to
-`L_max = 2*l_max` and `M_max = 2*m_max`.
+`builder.multipole_lm` gives the retained field channels. By default they
+extend to `L_max = 2*l_max` and `M_max = 2*m_max`; pass smaller `L_max` and
+`M_max` values to truncate the Coulomb expansion explicitly.
 
 The field convention is
 
@@ -121,14 +122,15 @@ uses the general path. Both paths return the same dense channel layout;
 the fixed-m path avoids azimuthal sampling and FFTs during evaluation.
 
 The general path uses associated-Legendre transforms and FFTs on a
-Gauss-Legendre-Fourier grid. The default angular grid resolves pair multipoles
-through `2*l_max` and their action projected onto the orbital cutoff. A custom
-grid requires at least `2*l_max+1` polar nodes and `4*m_max+1` azimuthal nodes.
+Gauss-Legendre-Fourier grid. The default angular grid resolves the complete
+orbital product space, including pair multipoles through `2*l_max`, even when
+the retained Coulomb expansion is smaller. A custom grid requires at least
+`2*l_max+1` polar nodes and `4*m_max+1` azimuthal nodes.
 
 ## Scope and validation
 
 The current radial implementation uses dense precomputed Coulomb response
-matrices, with storage proportional to `(2*l_max+1)*n_r**2`. It assumes a fixed
+matrices, with storage proportional to `(L_max+1)*n_r**2`. It assumes a fixed
 real radial grid beginning at zero and free-space multipole boundary conditions.
 No complex scaling or biorthogonal left/right orbital support is implemented.
 The builder does not require or enforce orthonormality of its input arrays.

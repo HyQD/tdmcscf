@@ -51,10 +51,13 @@ class SphericalMeanFieldBuilder:
         and last nodes are excluded from orbital arrays. The Coulomb response
         uses free-space multipole boundary conditions at the outer radius.
     l_max : int
-        Highest retained orbital angular momentum. Field multipoles extend
-        through ``2*l_max``.
+        Highest retained orbital angular momentum.
     m_max : int, optional
         Retain orbital channels with ``abs(m) <= m_max``. Defaults to l_max.
+    L_max, M_max : int, optional
+        Largest retained Coulomb multipole degree and absolute order.
+        Defaults are ``L_max = 2*l_max`` and ``M_max = 2*m_max``. Deliberately
+        smaller values truncate the Coulomb expansion.
     angular_grid : GaussLegendreFourierGrid, optional
         Default: ``from_bandlimit(2*l_max)``. A supplied grid must have at
         least ``2*l_max+1`` polar and ``4*m_max+1`` azimuthal nodes, sufficient
@@ -66,18 +69,39 @@ class SphericalMeanFieldBuilder:
     grid-lib's LM_to_I convention. The radial nodes ``r`` and weights are
     interior-node copies. ``radial_matrices[L]`` already includes source
     weights and 4*pi/(2*L+1). It is built once per builder, not per orbital
-    update. Its storage scales as (2*l_max+1)*n_r**2.
+    update. Its storage scales as (L_max+1)*n_r**2.
 
     Orthonormality is not checked or imposed by this component. The Coulomb
     map is well defined for arbitrary orbital inputs; callers implement
     normalization and orbital projection with the radial quadrature metric.
     """
 
-    def __init__(self, radial_grid, l_max, m_max=None, *, angular_grid=None):
+    def __init__(
+        self,
+        radial_grid,
+        l_max,
+        m_max=None,
+        *,
+        L_max=None,
+        M_max=None,
+        angular_grid=None,
+    ):
         self.l_max = _integer(l_max, "l_max")
         self.m_max = self.l_max if m_max is None else _integer(m_max, "m_max")
         if self.m_max > self.l_max:
             raise ValueError("m_max cannot exceed l_max.")
+        self.L_max = (
+            2 * self.l_max if L_max is None else _integer(L_max, "L_max")
+        )
+        self.M_max = (
+            2 * self.m_max if M_max is None else _integer(M_max, "M_max")
+        )
+        if self.L_max > 2 * self.l_max:
+            raise ValueError("L_max cannot exceed 2*l_max.")
+        if self.M_max > self.L_max:
+            raise ValueError("M_max cannot exceed L_max.")
+        if self.M_max > 2 * self.m_max:
+            raise ValueError("M_max cannot exceed 2*m_max.")
 
         r = np.asarray(radial_grid.r)
         weights = np.asarray(radial_grid.weights)
@@ -125,17 +149,17 @@ class SphericalMeanFieldBuilder:
         self.angular_grid = angular_grid
         self._orbital_transform = AngularTransform(self.l_max, self.m_max, angular_grid)
         self._field_transform = AngularTransform(
-            2 * self.l_max, 2 * self.m_max, angular_grid
+            self.L_max, self.M_max, angular_grid
         )
         self.orbital_lm = self._orbital_transform.channels
         self.multipole_lm = self._field_transform.channels
         self.orbital_shape = (len(self.r), len(self.orbital_lm))
-        self.radial_matrices = radial_Coulomb(radial_grid, 2 * self.l_max + 1)
+        self.radial_matrices = radial_Coulomb(radial_grid, self.L_max + 1)
         self._indices_by_l = tuple(
             np.array(
                 [k for k, (degree, _) in enumerate(self.multipole_lm) if degree == L]
             )
-            for L in range(2 * self.l_max + 1)
+            for L in range(self.L_max + 1)
         )
 
     def build(self, orbitals, *, pairs=None, orbital_m=None):
@@ -191,6 +215,8 @@ class SphericalMeanFieldBuilder:
             )
             pair_m = tuple(int(magnetic[s] - magnetic[q]) for q, s in pairs)
             for ip, ((q, s), M) in enumerate(zip(pairs, pair_m)):
+                if abs(M) > self.M_max:
+                    continue
                 density = self._field_transform.analyze_m(
                     values[q].conj() * values[s], M
                 )
@@ -261,8 +287,10 @@ class MeanFieldPotential:
                 M = self._pair_m[self._pair_index[pair]]
             else:
                 M = -self._pair_m[self._pair_index[pair[::-1]]]
-            field_values = builder._field_transform.synthesize_m(field.T, M)
             result = np.zeros_like(orbitals)
+            if abs(M) > builder.M_max:
+                return result[0] if single else result
+            field_values = builder._field_transform.synthesize_m(field.T, M)
             for p, (orbital, m) in enumerate(zip(orbitals, magnetic)):
                 values = builder._orbital_transform.synthesize_m(orbital, m)
                 result[p] = builder._orbital_transform.analyze_m(
