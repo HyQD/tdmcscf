@@ -103,6 +103,9 @@ solver = SphericalHartreeFock(
 result = solver.solve()
 ```
 
+A complete runnable version is available in
+[`examples/rhf_harmonic_oscillator.py`](../examples/rhf_harmonic_oscillator.py).
+
 `SphericalAtomicHartreeFock` remains available with its existing interface and
 returns an `AtomicHartreeFockResult` containing the original
 `AtomicConfiguration`. It delegates the shared SCF work to
