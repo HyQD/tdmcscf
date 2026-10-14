@@ -5,6 +5,11 @@ closed-shell atoms and ions by diagonalizing symmetry-adapted radial Fock
 matrices. Every occupied subshell contains all magnetic substates and shares
 one radial function over (m=-l,\ldots,l).
 
+This interface is retained as an atomic convenience wrapper. See
+[closed-shell spherical systems](spherical_systems.md) for harmonic,
+Gaussian-well, and custom central potentials handled by
+`SphericalHartreeFock`.
+
 The resulting one-particle density is rotationally invariant. The Fock
 operator therefore has the form
 
@@ -30,6 +35,8 @@ configuration.
 from tdmcscf.systems import closed_shell_atom
 
 neon = closed_shell_atom("Ne")
+same_neon = closed_shell_atom(10)
+assert same_neon is neon
 assert neon.nuclear_charge == 10
 assert neon.electron_count == 10
 assert neon.n_doubly_occupied == 5
@@ -40,6 +47,12 @@ assert neon.orbital_quantum_numbers == (
     (2, 1, 0),
     (2, 1, 1),
 )
+```
+
+For an ion selected by nuclear charge, also provide its integer charge:
+
+```python
+chloride = closed_shell_atom(17, charge=-1)
 ```
 
 An explicit closed-shell configuration can be supplied without modifying the
