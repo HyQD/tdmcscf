@@ -132,10 +132,9 @@ class SphericalRestrictedTDHF:
             result += self.dipole_field.apply(values, time)
         return result
 
-    def mean_field_action(self, orbitals):
-        r"""Apply ``sum_j (2 J_j - K_j)`` to every occupied orbital."""
+    def _mean_field_action(self, orbitals, fields):
+        """Apply previously constructed mean fields to trial orbitals."""
         values = self._orbitals(orbitals)
-        fields = self.mean_fields.build(values, orbital_m=self.orbital_m)
         result = np.zeros_like(values)
         for j in range(len(values)):
             result += 2 * fields.apply(
@@ -151,6 +150,49 @@ class SphericalRestrictedTDHF:
                     orbital_m=target_m,
                 )
         return result
+
+    def mean_field_action(self, orbitals):
+        r"""Apply ``sum_j (2 J_j - K_j)`` to every occupied orbital."""
+        values = self._orbitals(orbitals)
+        fields = self.mean_fields.build(values, orbital_m=self.orbital_m)
+        return self._mean_field_action(values, fields)
+
+    def freeze_rhs(self, reference_orbitals):
+        r"""Freeze the state-dependent Fock terms and return a linear RHS.
+
+        The returned callable has signature ``rhs(trial_orbitals, time)``.
+        Coulomb mean fields are constructed once from ``reference_orbitals``
+        and subsequently applied linearly to arbitrary trial orbitals. In the
+        orthogonal gauge, the occupied-space Fock matrix is also evaluated
+        with the reference orbitals while retaining the explicit time
+        dependence of the one-body field.
+        """
+        reference = self._orbitals(reference_orbitals).copy()
+        fields = self.mean_fields.build(reference, orbital_m=self.orbital_m)
+        reference_mean_field = self._mean_field_action(reference, fields)
+        occupied_fock_cache = {}
+
+        def frozen_rhs(trial_orbitals, time):
+            values = self._orbitals(trial_orbitals)
+            action = self.one_body_action(values, time)
+            action += self._mean_field_action(values, fields)
+            if self.orbital_gauge == "orthogonal":
+                key = float(time)
+                if key not in occupied_fock_cache:
+                    reference_fock = self.one_body_action(reference, time)
+                    reference_fock += reference_mean_field
+                    occupied_fock_cache[key] = self.overlaps(
+                        reference, reference_fock
+                    )
+                action -= np.einsum(
+                    "qai,qp->pai",
+                    values,
+                    occupied_fock_cache[key],
+                    optimize=True,
+                )
+            return -1j * action
+
+        return frozen_rhs
 
     def fock_action(self, orbitals, time):
         """Apply the complete closed-shell Fock operator."""

@@ -44,13 +44,15 @@ pulse = SineSquareLaser(
 
 # Propagation controls. The actual time step is adjusted slightly so that the
 # final point coincides exactly with the requested duration.
-integrator = "rk4"  # "strang2" or "rk4"
-integrator_options = (
-    {"solver": "gmres", "rtol": 1e-11, "atol": 0.0}
-    if integrator == "strang2"
-    else None
-)
-requested_time_step = 0.001
+integrator = "cn-cmf2"  # "strang2", "rk4", "cn-cmf1", or "cn-cmf2"
+if integrator in {"strang2", "cn-cmf1", "cn-cmf2"}:
+    integrator_options = {"solver": "gmres", "rtol": 0.0, "atol": 1e-10}
+    if integrator == "cn-cmf2":
+        # Use one predictor half-step or two predictor quarter-steps.
+        integrator_options["predictor_steps"] = 2
+else:
+    integrator_options = None
+requested_time_step = 0.2
 duration = 2 * np.pi * ncycles / omega
 
 # Optional boundary mask and checkpointing. Leave these as None to disable
@@ -102,6 +104,8 @@ print("=" * len(title))
 print(f"{'Field gauge':<24}: {field_gauge}")
 print(f"{'Orbital gauge':<24}: {orbital_gauge}")
 print(f"{'Integrator':<24}: {integrator}")
+if calculation.predictor_steps is not None:
+    print(f"{'Predictor steps':<24}: {calculation.predictor_steps}")
 print(f"{'Element boundaries':<24}: {nodes} bohr")
 print(f"{'Points per element':<24}: {n_points}")
 print(f"{'(l_max, m_max)':<24}: ({l_max}, {m_max})")
@@ -129,12 +133,13 @@ for p, (numbers, orbital_axes) in enumerate(zip(quantum_numbers, position_axes))
     orbital_axes.plot(result.times, orbital_z[:, p], label=label)
     orbital_axes.set_ylabel(r"$\langle z\rangle_p$ (bohr)")
     orbital_axes.legend()
-    norm_axes.plot(result.times, orbital_norms[:, p], label=label)
+    norm_error = np.abs(1.0 - orbital_norms[:, p])
+    norm_axes.semilogy(result.times, norm_error, label=label)
 
 dipole_axes.set_ylabel(r"$d_z(t)$ (a.u.)")
 dipole_axes.set_title(f"Dipole response of {system.label}")
 norm_axes.set_xlabel("Time (a.u.)")
-norm_axes.set_ylabel(r"$\langle \phi_p|\phi_p\rangle$")
+norm_axes.set_ylabel(r"$|1-\langle \phi_p|\phi_p\rangle|$")
 norm_axes.legend()
 figure.tight_layout()
 plt.show()
