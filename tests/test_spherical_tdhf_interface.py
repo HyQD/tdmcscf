@@ -255,3 +255,58 @@ def test_cncmf2_rejects_invalid_predictor_steps(
             time_step=0.01,
             final_time=0.01,
         )
+
+
+@pytest.mark.parametrize("orbital_gauge", ["canonical", "orthogonal"])
+@pytest.mark.parametrize(
+    ("integrator_name", "predictor_steps"),
+    [("im-cdm1", None), ("im-cdm2", 1)],
+)
+def test_imcdm_propagation_options(
+    ground_state_setup,
+    orbital_gauge,
+    integrator_name,
+    predictor_steps,
+):
+    calculation = SphericalTDHF(
+        ground_state_setup.system,
+        nodes=ground_state_setup.grid.nodes,
+        n_points=ground_state_setup.grid.n_points,
+        l_max=1,
+        m_max=1,
+        initial_state=ground_state_setup.initial_orbitals,
+        fields=[(ConstantField(1e-4), (0.0, 0.0, 1.0))],
+        field_gauge="length",
+        orbital_gauge=orbital_gauge,
+        integrator=integrator_name,
+        integrator_options={"solver": "gmres", "rtol": 1e-11},
+        time_step=0.01,
+        final_time=0.01,
+    )
+    result = calculation.run()
+    assert calculation.predictor_steps == predictor_steps
+    assert np.all(np.isfinite(result.orbitals))
+    np.testing.assert_allclose(result.orbital_norms, 1.0, atol=5e-10)
+    if predictor_steps is not None:
+        assert calculation.integrator.predictor_steps == 1
+        assert len(calculation.integrator.last_predictor_iterations) == 1
+        assert len(calculation.integrator.last_corrector_iterations) == 2
+
+
+@pytest.mark.parametrize("predictor_steps", [0, 2])
+def test_imcdm2_rejects_nonstandard_predictor_steps(
+    ground_state_setup, predictor_steps
+):
+    with pytest.raises(ValueError, match="predictor_steps"):
+        SphericalTDHF(
+            ground_state_setup.system,
+            nodes=ground_state_setup.grid.nodes,
+            n_points=ground_state_setup.grid.n_points,
+            l_max=1,
+            m_max=1,
+            initial_state=ground_state_setup.initial_orbitals,
+            integrator="im-cdm2",
+            integrator_options={"predictor_steps": predictor_steps},
+            time_step=0.01,
+            final_time=0.01,
+        )

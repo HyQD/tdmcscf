@@ -75,6 +75,24 @@ TDMC-SCF supplies this protocol through
 `SphericalRestrictedTDHF.freeze_rhs`. Construction and application of the
 spherical Coulomb fields remain in the coordinate-specific package.
 
+## Constant-density implicit midpoint
+
+The IM-CDM methods use the same coordinate-independent frozen-operator
+drivers as CN-CMF but give the callback a different physical meaning.
+`SphericalRestrictedTDHF.freeze_density_rhs` fixes the TDHF density entering
+the direct and exchange operators. The resulting Fock action remains linear
+in every Krylov trial state.
+
+`im-cdm1` freezes the initial density and takes one full implicit-midpoint
+step. `im-cdm2` first takes one predictor half-step with the initial density,
+then freezes the predicted midpoint density and restarts from the initial
+state for two corrector half-steps. This is the CDM2 sequence described in
+Appendix B of Aurbakken *et al.*, J. Chem. Phys. **165**, 084307 (2026).
+
+Both orbital gauges are available. In the orthogonal gauge, the
+occupied-space Fock matrix is evaluated from the same fixed reference
+orbitals, while explicit time dependence in the one-body field is retained.
+
 ## Crank--Nicolson
 
 For a linear equation

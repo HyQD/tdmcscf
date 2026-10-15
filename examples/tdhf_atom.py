@@ -44,8 +44,15 @@ pulse = SineSquareLaser(
 
 # Propagation controls. The actual time step is adjusted slightly so that the
 # final point coincides exactly with the requested duration.
-integrator = "cn-cmf2"  # "strang2", "rk4", "cn-cmf1", or "cn-cmf2"
-if integrator in {"strang2", "cn-cmf1", "cn-cmf2"}:
+integrator = "cn-cmf2"
+# Choices: "strang2", "rk4", "cn-cmf1", "cn-cmf2", "im-cdm1", "im-cdm2"
+if integrator in {
+    "strang2",
+    "cn-cmf1",
+    "cn-cmf2",
+    "im-cdm1",
+    "im-cdm2",
+}:
     integrator_options = {"solver": "gmres", "rtol": 0.0, "atol": 1e-10}
     if integrator == "cn-cmf2":
         # Use one predictor half-step or two predictor quarter-steps.

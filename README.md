@@ -21,8 +21,8 @@ length- and velocity-gauge interactions with arbitrary Cartesian polarization
 and sums of temporal profiles from `electromagnetic_fields`.
 
 The [high-level spherical TDHF interface](docs/spherical_tdhf_interface.md)
-configures ground-state initialization, fields, Strang2, RK4, or CN-CMF propagation,
-sampling, radial masks, and restartable checkpoints.
+configures ground-state initialization, fields, Strang2, RK4, CN-CMF, or
+IM-CDM propagation, sampling, radial masks, and restartable checkpoints.
 
 ## Requirements
 

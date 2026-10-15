@@ -202,3 +202,82 @@ def test_frozen_rhs_is_linear_and_matches_full_rhs_at_reference(
         trial_b, time
     )
     np.testing.assert_allclose(combined, separate, atol=5e-12, rtol=5e-12)
+
+
+@pytest.mark.parametrize("orbital_gauge", ["canonical", "orthogonal"])
+def test_density_frozen_rhs_is_linear_and_matches_full_rhs_at_reference(
+    radial_grid, orbital_gauge
+):
+    core = AtomicCoreHamiltonian(radial_grid, 1, m_max=1, Z=2)
+    builder = SphericalMeanFieldBuilder(
+        radial_grid, 1, m_max=1, L_max=2, M_max=2
+    )
+    equation = SphericalRestrictedTDHF(
+        core,
+        builder,
+        orbital_gauge=orbital_gauge,
+    )
+    reference = normalized_orbitals(core, count=2, seed=41)
+    trial_a = normalized_orbitals(core, count=2, seed=43)
+    trial_b = normalized_orbitals(core, count=2, seed=47)
+    time = 0.29
+    density_frozen_rhs = equation.freeze_density_rhs(reference)
+
+    expected = equation.linear_rhs(reference, time) + equation.nonlinear_rhs(
+        reference, time
+    )
+    np.testing.assert_allclose(
+        density_frozen_rhs(reference, time),
+        expected,
+        atol=5e-12,
+        rtol=5e-12,
+    )
+
+    alpha = 0.2 + 0.6j
+    beta = -0.5 + 0.1j
+    combined = density_frozen_rhs(alpha * trial_a + beta * trial_b, time)
+    separate = alpha * density_frozen_rhs(
+        trial_a, time
+    ) + beta * density_frozen_rhs(trial_b, time)
+    np.testing.assert_allclose(combined, separate, atol=7e-12, rtol=7e-12)
+
+    mean_field_frozen_rhs = equation.freeze_rhs(reference)
+    assert np.linalg.norm(
+        density_frozen_rhs(trial_a, time)
+        - mean_field_frozen_rhs(trial_a, time)
+    ) > 1e-8
+
+
+@pytest.mark.parametrize(
+    ("orbital_gauge", "preserves_overlap_matrix"),
+    [("canonical", True), ("orthogonal", False)],
+)
+def test_density_frozen_midpoint_step_preserves_combined_norm(
+    radial_grid, orbital_gauge, preserves_overlap_matrix
+):
+    core = AtomicCoreHamiltonian(radial_grid, 1, m_max=0, Z=2)
+    builder = SphericalMeanFieldBuilder(
+        radial_grid, 1, m_max=0, L_max=2, M_max=0
+    )
+    equation = SphericalRestrictedTDHF(
+        core,
+        builder,
+        orbital_gauge=orbital_gauge,
+        orbital_m=[0, 0],
+    )
+    orbitals = normalized_orbitals(core, count=2, seed=53)
+    propagated = CrankNicolson(rtol=1e-12, atol=1e-14)(
+        orbitals,
+        0.0,
+        0.01,
+        equation.freeze_density_rhs(orbitals),
+    )
+    overlap = equation.overlaps(propagated, propagated)
+    np.testing.assert_allclose(np.trace(overlap), 2.0, atol=3e-11, rtol=3e-11)
+    if preserves_overlap_matrix:
+        np.testing.assert_allclose(
+            overlap,
+            np.eye(2),
+            atol=3e-11,
+            rtol=3e-11,
+        )
