@@ -29,8 +29,9 @@ sampling, radial masks, and restartable checkpoints.
 Runtime requirements match `HyQD-grid-lib`: Python >=3.12,<3.15,
 NumPy >=2.5.2,<2.6, SciPy >=1.18.0,<1.19, and Numba >=0.67.0,<0.68,
 along with opt-einsum, SymPy, packaging, tqdm, and Matplotlib.
-`HyQD-grid-lib>=1.1.0` is also a runtime dependency.
-Temporal field profiles are provided by `HyQD-electromagnetic-fields`.
+`HyQD-grid-lib>=1.1.0` and `HyQD-integrator-lib>=0.1.0` are runtime
+dependencies. Temporal field profiles are provided by
+`HyQD-electromagnetic-fields`.
 
 ## Installation
 

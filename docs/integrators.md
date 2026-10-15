@@ -1,8 +1,8 @@
 # Time integrators
 
-`tdmcscf.integrators` contains coordinate-independent time-stepping methods.
-The integrators receive operator or right-hand-side callables; they do not
-import spherical-grid or GTO implementations.
+TDMC-SCF uses the coordinate-independent time-stepping methods provided by
+`HyQD-integrator-lib`. The integrators receive operator or right-hand-side
+callables; they do not import spherical-grid or GTO implementations.
 
 ## Second-order Strang splitting
 
@@ -29,7 +29,7 @@ $[t,t+\Delta t/2]$ and $[t+\Delta t/2,t+\Delta t]$. A midpoint method
 therefore evaluates $A$ at $t+\Delta t/4$ and $t+3\Delta t/4$.
 
 ```python
-from tdmcscf.integrators import CrankNicolson, RK4, Strang2
+from integrator_lib import CrankNicolson, RK4, Strang2
 
 integrator = Strang2(
     linear_integrator=CrankNicolson(

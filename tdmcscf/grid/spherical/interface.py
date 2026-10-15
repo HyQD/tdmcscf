@@ -10,7 +10,7 @@ import warnings
 import numpy as np
 from grid_lib.spherical_coordinates.utils import mask_function
 
-from tdmcscf.integrators import CrankNicolson, RK4, Strang2
+from integrator_lib import CrankNicolson, RK4, Strang2
 from tdmcscf.systems import SphericalElectronicSystem
 
 from ._validation import _integer, _positive_real
