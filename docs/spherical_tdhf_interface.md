@@ -136,6 +136,22 @@ the default and is the established choice when mean fields are held constant
 over an integration interval. Explicit time dependence from the applied field
 is still evaluated at every Crank--Nicolson substep midpoint.
 
+`integrator="im-cdm1"` holds the initial TDHF density matrix fixed during one
+full implicit-midpoint step. `integrator="im-cdm2"` predicts the midpoint
+with one IM-CDM1 half-step and then restarts from the initial orbitals for two
+corrector half-steps with the predicted density fixed. The one-half-step
+predictor is part of the IM-CDM2 definition; `predictor_steps` therefore
+defaults to and must remain one.
+
+IM-CDM supports both canonical and orthogonal orbital gauges. The canonical
+gauge follows the constant-density formulation directly and is generally the
+preferred choice. In the orthogonal gauge, the occupied-space Fock matrix is
+frozen with the same reference orbitals as the density. Explicit time
+dependence from the applied field remains active in both gauges. At finite
+step size, the coupled orthogonal-gauge midpoint solve preserves the combined
+orbital norm but need not preserve every individual orbital overlap as
+accurately as the canonical formulation.
+
 `integrator="rk4"` applies ordinary RK4 to the complete orbital equation and
 rebuilds the mean fields at every stage. Constructing an RK4 calculation
 issues a warning containing a conservative kinetic-spectrum estimate. The

@@ -46,6 +46,18 @@ action that is linear in trial orbitals. In the orthogonal gauge, the
 occupied-space Fock matrix is evaluated with the same reference orbitals.
 The external field retains its explicit time dependence.
 
+For constant-density propagation, `freeze_density_rhs(reference_orbitals)`
+instead fixes the density entering the Fock operator. Direct potentials are
+constructed once. The exchange action constructs cross potentials between
+the fixed reference orbitals and each trial state, which preserves linearity
+without replacing density freezing by mean-field freezing.
+
+In the orthogonal gauge, the occupied-space Fock matrix is also evaluated
+from the fixed reference orbitals. Thus, for trial orbitals `X`, the frozen
+action has the form `F[P_ref](t) X - X f_occ_ref(t)`. The canonical gauge
+uses only the first term. Explicit field dependence remains time dependent
+in both gauges.
+
 ## Coulomb and orbital cutoffs
 
 `SphericalMeanFieldBuilder` accepts independent orbital cutoffs `(l_max,
