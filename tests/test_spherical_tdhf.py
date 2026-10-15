@@ -14,7 +14,7 @@ from tdmcscf.grid.spherical import (
     SphericalMeanFieldBuilder,
     SphericalRestrictedTDHF,
 )
-from tdmcscf.integrators import CrankNicolson, RK4, Strang2
+from integrator_lib import CrankNicolson, RK4, Strang2
 
 
 @pytest.fixture(scope="module")
