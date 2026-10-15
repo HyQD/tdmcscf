@@ -193,3 +193,65 @@ def test_rejects_masks_incompatible_with_the_grid(mask, ground_state_setup):
             final_time=0.02,
             mask=mask,
         )
+
+
+@pytest.mark.parametrize(
+    ("integrator_name", "options", "predictor_steps"),
+    [
+        ("cn-cmf1", {"solver": "gmres", "rtol": 1e-11}, None),
+        (
+            "cn-cmf2",
+            {"solver": "gmres", "rtol": 1e-11, "predictor_steps": 1},
+            1,
+        ),
+        (
+            "cn-cmf2",
+            {"solver": "gmres", "rtol": 1e-11},
+            2,
+        ),
+    ],
+)
+def test_cncmf_propagation_options(
+    ground_state_setup, integrator_name, options, predictor_steps
+):
+    calculation = SphericalTDHF(
+        ground_state_setup.system,
+        nodes=ground_state_setup.grid.nodes,
+        n_points=ground_state_setup.grid.n_points,
+        l_max=1,
+        m_max=1,
+        initial_state=ground_state_setup.initial_orbitals,
+        fields=[(ConstantField(1e-4), (0.0, 0.0, 1.0))],
+        field_gauge="length",
+        orbital_gauge="orthogonal",
+        integrator=integrator_name,
+        integrator_options=options,
+        time_step=0.01,
+        final_time=0.01,
+    )
+    result = calculation.run()
+    assert calculation.predictor_steps == predictor_steps
+    assert np.all(np.isfinite(result.orbitals))
+    np.testing.assert_allclose(result.orbital_norms, 1.0, atol=5e-10)
+    if predictor_steps is not None:
+        assert len(calculation.integrator.last_predictor_iterations) == predictor_steps
+        assert len(calculation.integrator.last_corrector_iterations) == 2
+
+
+@pytest.mark.parametrize("predictor_steps", [0, 3])
+def test_cncmf2_rejects_invalid_predictor_steps(
+    ground_state_setup, predictor_steps
+):
+    with pytest.raises(ValueError, match="predictor_steps"):
+        SphericalTDHF(
+            ground_state_setup.system,
+            nodes=ground_state_setup.grid.nodes,
+            n_points=ground_state_setup.grid.n_points,
+            l_max=1,
+            m_max=1,
+            initial_state=ground_state_setup.initial_orbitals,
+            integrator="cn-cmf2",
+            integrator_options={"predictor_steps": predictor_steps},
+            time_step=0.01,
+            final_time=0.01,
+        )

@@ -113,6 +113,29 @@ linear solver can be supplied through `integrator_options`, for example:
 integrator_options={"solver": "gmres", "rtol": 1e-11, "atol": 0.0}
 ```
 
+`integrator="cn-cmf1"` freezes the mean-field operator at the beginning of
+each outer interval and performs one preconditioned Crank--Nicolson step.
+This is first order with respect to the state-dependent mean field.
+
+`integrator="cn-cmf2"` predicts the midpoint with the initial mean field,
+freezes the operator at that predicted state, and restarts from the initial
+orbitals for two Crank--Nicolson corrector half-steps. The predictor uses two
+quarter-steps by default. One predictor half-step can be selected with:
+
+```python
+integrator_options={
+    "solver": "gmres",
+    "rtol": 1e-11,
+    "atol": 0.0,
+    "predictor_steps": 1,
+}
+```
+
+The CN-CMF methods support both orbital gauges. The orthogonal gauge remains
+the default and is the established choice when mean fields are held constant
+over an integration interval. Explicit time dependence from the applied field
+is still evaluated at every Crank--Nicolson substep midpoint.
+
 `integrator="rk4"` applies ordinary RK4 to the complete orbital equation and
 rebuilds the mean fields at every stage. Constructing an RK4 calculation
 issues a warning containing a conservative kinetic-spectrum estimate. The

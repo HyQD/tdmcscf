@@ -40,6 +40,12 @@ $$
 Adding it to the linear action gives exactly $QF\Phi$. The orthogonal gauge
 is the default.
 
+For constant-mean-field propagation, `freeze_rhs(reference_orbitals)` builds
+the Coulomb pair potentials once from the reference state and returns an
+action that is linear in trial orbitals. In the orthogonal gauge, the
+occupied-space Fock matrix is evaluated with the same reference orbitals.
+The external field retains its explicit time dependence.
+
 ## Coulomb and orbital cutoffs
 
 `SphericalMeanFieldBuilder` accepts independent orbital cutoffs `(l_max,

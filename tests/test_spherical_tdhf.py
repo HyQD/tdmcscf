@@ -167,3 +167,38 @@ def test_rejects_invalid_orbital_gauge(radial_grid, gauge):
     builder = SphericalMeanFieldBuilder(radial_grid, 0)
     with pytest.raises(ValueError, match="orbital_gauge"):
         SphericalRestrictedTDHF(core, builder, orbital_gauge=gauge)
+
+
+@pytest.mark.parametrize("orbital_gauge", ["canonical", "orthogonal"])
+def test_frozen_rhs_is_linear_and_matches_full_rhs_at_reference(
+    radial_grid, orbital_gauge
+):
+    core = AtomicCoreHamiltonian(radial_grid, 1, m_max=1, Z=2)
+    builder = SphericalMeanFieldBuilder(
+        radial_grid, 1, m_max=1, L_max=2, M_max=2
+    )
+    equation = SphericalRestrictedTDHF(
+        core,
+        builder,
+        orbital_gauge=orbital_gauge,
+    )
+    reference = normalized_orbitals(core, count=2, seed=17)
+    trial_a = normalized_orbitals(core, count=2, seed=23)
+    trial_b = normalized_orbitals(core, count=2, seed=31)
+    time = 0.37
+    frozen_rhs = equation.freeze_rhs(reference)
+
+    expected = equation.linear_rhs(reference, time) + equation.nonlinear_rhs(
+        reference, time
+    )
+    np.testing.assert_allclose(
+        frozen_rhs(reference, time), expected, atol=4e-12, rtol=4e-12
+    )
+
+    alpha = 0.4 - 0.2j
+    beta = -0.3 + 0.7j
+    combined = frozen_rhs(alpha * trial_a + beta * trial_b, time)
+    separate = alpha * frozen_rhs(trial_a, time) + beta * frozen_rhs(
+        trial_b, time
+    )
+    np.testing.assert_allclose(combined, separate, atol=5e-12, rtol=5e-12)

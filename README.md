@@ -21,7 +21,7 @@ length- and velocity-gauge interactions with arbitrary Cartesian polarization
 and sums of temporal profiles from `electromagnetic_fields`.
 
 The [high-level spherical TDHF interface](docs/spherical_tdhf_interface.md)
-configures ground-state initialization, fields, Strang2 or RK4 propagation,
+configures ground-state initialization, fields, Strang2, RK4, or CN-CMF propagation,
 sampling, radial masks, and restartable checkpoints.
 
 ## Requirements
@@ -29,7 +29,7 @@ sampling, radial masks, and restartable checkpoints.
 Runtime requirements match `HyQD-grid-lib`: Python >=3.12,<3.15,
 NumPy >=2.5.2,<2.6, SciPy >=1.18.0,<1.19, and Numba >=0.67.0,<0.68,
 along with opt-einsum, SymPy, packaging, tqdm, and Matplotlib.
-`HyQD-grid-lib>=1.1.0` and `HyQD-integrator-lib>=0.1.0` are runtime
+`HyQD-grid-lib>=1.1.0` and `HyQD-integrator-lib>=0.2.0` are runtime
 dependencies. Temporal field profiles are provided by
 `HyQD-electromagnetic-fields`.
 

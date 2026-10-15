@@ -58,6 +58,23 @@ $$
 
 the corresponding callable returns `-1j * H.apply(y, t)`.
 
+## Constant-mean-field Crank--Nicolson
+
+`CNCMF1` and `CNCMF2` use a frozen-operator callback supplied by the physical
+model. Calling `freeze(reference_state)` constructs the state-dependent data
+once and returns a right-hand side that is linear in its trial state while
+retaining explicit time dependence.
+
+`CNCMF1` freezes at the initial state and advances one Crank--Nicolson step.
+`CNCMF2` predicts the interval midpoint, freezes at the predicted state, and
+restarts from the initial state for two corrector half-steps. Its midpoint
+predictor uses two quarter-steps by default, or one half-step when
+`predictor_steps=1`.
+
+TDMC-SCF supplies this protocol through
+`SphericalRestrictedTDHF.freeze_rhs`. Construction and application of the
+spherical Coulomb fields remain in the coordinate-specific package.
+
 ## Crank--Nicolson
 
 For a linear equation
