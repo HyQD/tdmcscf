@@ -58,18 +58,17 @@ $$
 
 the corresponding callable returns `-1j * H.apply(y, t)`.
 
-## Constant-mean-field Crank--Nicolson
+## Constant-mean-field implicit midpoint
 
-`CNCMF1` and `CNCMF2` use a frozen-operator callback supplied by the physical
+`IMCMF1` and `IMCMF2` use a frozen-operator callback supplied by the physical
 model. Calling `freeze(reference_state)` constructs the state-dependent data
 once and returns a right-hand side that is linear in its trial state while
 retaining explicit time dependence.
 
-`CNCMF1` freezes at the initial state and advances one Crank--Nicolson step.
-`CNCMF2` predicts the interval midpoint, freezes at the predicted state, and
-restarts from the initial state for two corrector half-steps. Its midpoint
-predictor uses two quarter-steps by default, or one half-step when
-`predictor_steps=1`.
+`IMCMF1` freezes at the initial state and advances one implicit-midpoint step.
+`IMCMF2` takes one predictor half-step, freezes at the predicted midpoint
+state, and restarts from the initial state. Its corrector uses two half-steps
+by default, or one whole step when `corrector_steps=1`.
 
 TDMC-SCF supplies this protocol through
 `SphericalRestrictedTDHF.freeze_rhs`. Construction and application of the
@@ -78,7 +77,7 @@ spherical Coulomb fields remain in the coordinate-specific package.
 ## Constant-density implicit midpoint
 
 The IM-CDM methods use the same coordinate-independent frozen-operator
-drivers as CN-CMF but give the callback a different physical meaning.
+drivers as IM-CMF but give the callback a different physical meaning.
 `SphericalRestrictedTDHF.freeze_density_rhs` fixes the TDHF density entering
 the direct and exchange operators. The resulting Fock action remains linear
 in every Krylov trial state.
@@ -86,8 +85,9 @@ in every Krylov trial state.
 `im-cdm1` freezes the initial density and takes one full implicit-midpoint
 step. `im-cdm2` first takes one predictor half-step with the initial density,
 then freezes the predicted midpoint density and restarts from the initial
-state for two corrector half-steps. This is the CDM2 sequence described in
-Appendix B of Aurbakken *et al.*, J. Chem. Phys. **165**, 084307 (2026).
+state. Its corrector can use one whole step or two half-steps. This is the
+CDM2 sequence described in Appendix B of Aurbakken *et al.*, J. Chem. Phys.
+**165**, 084307 (2026).
 
 Both orbital gauges are available. In the orthogonal gauge, the
 occupied-space Fock matrix is evaluated from the same fixed reference
