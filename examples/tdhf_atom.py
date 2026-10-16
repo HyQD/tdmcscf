@@ -26,7 +26,7 @@ M_max = L_max
 
 # The electromagnetic and occupied-orbital gauges are independent choices.
 field_gauge = "velocity"  # "velocity" or "length"
-orbital_gauge = "orthogonal"  # "orthogonal" or "canonical"
+orbital_gauge = "canonical"  # "orthogonal" or "canonical"
 
 # One-cycle sine-square pulse, linearly polarized along z. Polarizations are
 # normalized by SphericalTDHF, so their magnitude does not rescale E0.
@@ -44,19 +44,19 @@ pulse = SineSquareLaser(
 
 # Propagation controls. The actual time step is adjusted slightly so that the
 # final point coincides exactly with the requested duration.
-integrator = "cn-cmf2"
-# Choices: "strang2", "rk4", "cn-cmf1", "cn-cmf2", "im-cdm1", "im-cdm2"
+integrator = "im-cdm2"
+# Choices: "strang2", "rk4", "im-cmf1", "im-cmf2", "im-cdm1", "im-cdm2"
 if integrator in {
     "strang2",
-    "cn-cmf1",
-    "cn-cmf2",
+    "im-cmf1",
+    "im-cmf2",
     "im-cdm1",
     "im-cdm2",
 }:
-    integrator_options = {"solver": "gmres", "rtol": 0.0, "atol": 1e-10}
-    if integrator == "cn-cmf2":
-        # Use one predictor half-step or two predictor quarter-steps.
-        integrator_options["predictor_steps"] = 2
+    integrator_options = {"solver": "gmres", "rtol": 0.0, "atol": 1e-12}
+    if integrator in {"im-cmf2", "im-cdm2"}:
+        # Use one whole corrector step or two corrector half-steps.
+        integrator_options["corrector_steps"] = 1
 else:
     integrator_options = None
 requested_time_step = 0.2
@@ -93,7 +93,7 @@ calculation = SphericalTDHF(
     integrator=integrator,
     integrator_options=integrator_options,
     time_step=requested_time_step,
-    final_time=duration,
+    final_time=duration+20,
     mask=mask,
     checkpoint_path=checkpoint_path,
     checkpoint_interval=checkpoint_interval,
@@ -111,8 +111,8 @@ print("=" * len(title))
 print(f"{'Field gauge':<24}: {field_gauge}")
 print(f"{'Orbital gauge':<24}: {orbital_gauge}")
 print(f"{'Integrator':<24}: {integrator}")
-if calculation.predictor_steps is not None:
-    print(f"{'Predictor steps':<24}: {calculation.predictor_steps}")
+if calculation.corrector_steps is not None:
+    print(f"{'Corrector steps':<24}: {calculation.corrector_steps}")
 print(f"{'Element boundaries':<24}: {nodes} bohr")
 print(f"{'Points per element':<24}: {n_points}")
 print(f"{'(l_max, m_max)':<24}: ({l_max}, {m_max})")

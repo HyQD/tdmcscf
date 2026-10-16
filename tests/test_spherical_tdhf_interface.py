@@ -196,23 +196,23 @@ def test_rejects_masks_incompatible_with_the_grid(mask, ground_state_setup):
 
 
 @pytest.mark.parametrize(
-    ("integrator_name", "options", "predictor_steps"),
+    ("integrator_name", "options", "corrector_steps"),
     [
-        ("cn-cmf1", {"solver": "gmres", "rtol": 1e-11}, None),
+        ("im-cmf1", {"solver": "gmres", "rtol": 1e-11}, None),
         (
-            "cn-cmf2",
-            {"solver": "gmres", "rtol": 1e-11, "predictor_steps": 1},
+            "im-cmf2",
+            {"solver": "gmres", "rtol": 1e-11, "corrector_steps": 1},
             1,
         ),
         (
-            "cn-cmf2",
+            "im-cmf2",
             {"solver": "gmres", "rtol": 1e-11},
             2,
         ),
     ],
 )
-def test_cncmf_propagation_options(
-    ground_state_setup, integrator_name, options, predictor_steps
+def test_imcmf_propagation_options(
+    ground_state_setup, integrator_name, options, corrector_steps
 ):
     calculation = SphericalTDHF(
         ground_state_setup.system,
@@ -230,19 +230,22 @@ def test_cncmf_propagation_options(
         final_time=0.01,
     )
     result = calculation.run()
-    assert calculation.predictor_steps == predictor_steps
+    assert calculation.corrector_steps == corrector_steps
     assert np.all(np.isfinite(result.orbitals))
     np.testing.assert_allclose(result.orbital_norms, 1.0, atol=5e-10)
-    if predictor_steps is not None:
-        assert len(calculation.integrator.last_predictor_iterations) == predictor_steps
-        assert len(calculation.integrator.last_corrector_iterations) == 2
+    if corrector_steps is not None:
+        assert len(calculation.integrator.last_predictor_iterations) == 1
+        assert (
+            len(calculation.integrator.last_corrector_iterations)
+            == corrector_steps
+        )
 
 
-@pytest.mark.parametrize("predictor_steps", [0, 3])
-def test_cncmf2_rejects_invalid_predictor_steps(
-    ground_state_setup, predictor_steps
+@pytest.mark.parametrize("corrector_steps", [0, 3])
+def test_imcmf2_rejects_invalid_corrector_steps(
+    ground_state_setup, corrector_steps
 ):
-    with pytest.raises(ValueError, match="predictor_steps"):
+    with pytest.raises(ValueError, match="corrector_steps"):
         SphericalTDHF(
             ground_state_setup.system,
             nodes=ground_state_setup.grid.nodes,
@@ -250,8 +253,8 @@ def test_cncmf2_rejects_invalid_predictor_steps(
             l_max=1,
             m_max=1,
             initial_state=ground_state_setup.initial_orbitals,
-            integrator="cn-cmf2",
-            integrator_options={"predictor_steps": predictor_steps},
+            integrator="im-cmf2",
+            integrator_options={"corrector_steps": corrector_steps},
             time_step=0.01,
             final_time=0.01,
         )
@@ -259,15 +262,23 @@ def test_cncmf2_rejects_invalid_predictor_steps(
 
 @pytest.mark.parametrize("orbital_gauge", ["canonical", "orthogonal"])
 @pytest.mark.parametrize(
-    ("integrator_name", "predictor_steps"),
-    [("im-cdm1", None), ("im-cdm2", 1)],
+    ("integrator_name", "configured_steps", "expected_steps"),
+    [
+        ("im-cdm1", None, None),
+        ("im-cdm2", 1, 1),
+        ("im-cdm2", None, 2),
+    ],
 )
 def test_imcdm_propagation_options(
     ground_state_setup,
     orbital_gauge,
     integrator_name,
-    predictor_steps,
+    configured_steps,
+    expected_steps,
 ):
+    options = {"solver": "gmres", "rtol": 1e-11}
+    if configured_steps is not None:
+        options["corrector_steps"] = configured_steps
     calculation = SphericalTDHF(
         ground_state_setup.system,
         nodes=ground_state_setup.grid.nodes,
@@ -279,25 +290,28 @@ def test_imcdm_propagation_options(
         field_gauge="length",
         orbital_gauge=orbital_gauge,
         integrator=integrator_name,
-        integrator_options={"solver": "gmres", "rtol": 1e-11},
+        integrator_options=options,
         time_step=0.01,
         final_time=0.01,
     )
     result = calculation.run()
-    assert calculation.predictor_steps == predictor_steps
+    assert calculation.corrector_steps == expected_steps
     assert np.all(np.isfinite(result.orbitals))
     np.testing.assert_allclose(result.orbital_norms, 1.0, atol=5e-10)
-    if predictor_steps is not None:
-        assert calculation.integrator.predictor_steps == 1
+    if expected_steps is not None:
+        assert calculation.integrator.corrector_steps == expected_steps
         assert len(calculation.integrator.last_predictor_iterations) == 1
-        assert len(calculation.integrator.last_corrector_iterations) == 2
+        assert (
+            len(calculation.integrator.last_corrector_iterations)
+            == expected_steps
+        )
 
 
-@pytest.mark.parametrize("predictor_steps", [0, 2])
-def test_imcdm2_rejects_nonstandard_predictor_steps(
-    ground_state_setup, predictor_steps
+@pytest.mark.parametrize("corrector_steps", [0, 3])
+def test_imcdm2_rejects_invalid_corrector_steps(
+    ground_state_setup, corrector_steps
 ):
-    with pytest.raises(ValueError, match="predictor_steps"):
+    with pytest.raises(ValueError, match="corrector_steps"):
         SphericalTDHF(
             ground_state_setup.system,
             nodes=ground_state_setup.grid.nodes,
@@ -306,7 +320,7 @@ def test_imcdm2_rejects_nonstandard_predictor_steps(
             m_max=1,
             initial_state=ground_state_setup.initial_orbitals,
             integrator="im-cdm2",
-            integrator_options={"predictor_steps": predictor_steps},
+            integrator_options={"corrector_steps": corrector_steps},
             time_step=0.01,
             final_time=0.01,
         )

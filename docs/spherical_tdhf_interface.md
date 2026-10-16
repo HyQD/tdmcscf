@@ -113,35 +113,34 @@ linear solver can be supplied through `integrator_options`, for example:
 integrator_options={"solver": "gmres", "rtol": 1e-11, "atol": 0.0}
 ```
 
-`integrator="cn-cmf1"` freezes the mean-field operator at the beginning of
-each outer interval and performs one preconditioned Crank--Nicolson step.
+`integrator="im-cmf1"` freezes the mean-field operator at the beginning of
+each outer interval and performs one preconditioned implicit-midpoint step.
 This is first order with respect to the state-dependent mean field.
 
-`integrator="cn-cmf2"` predicts the midpoint with the initial mean field,
+`integrator="im-cmf2"` predicts the midpoint with the initial mean field,
 freezes the operator at that predicted state, and restarts from the initial
-orbitals for two Crank--Nicolson corrector half-steps. The predictor uses two
-quarter-steps by default. One predictor half-step can be selected with:
+orbitals. The predictor is one implicit-midpoint half-step. The corrector uses
+two half-steps by default; one whole step can be selected with:
 
 ```python
 integrator_options={
     "solver": "gmres",
     "rtol": 1e-11,
     "atol": 0.0,
-    "predictor_steps": 1,
+    "corrector_steps": 1,
 }
 ```
 
-The CN-CMF methods support both orbital gauges. The orthogonal gauge remains
+The IM-CMF methods support both orbital gauges. The orthogonal gauge remains
 the default and is the established choice when mean fields are held constant
 over an integration interval. Explicit time dependence from the applied field
 is still evaluated at every Crank--Nicolson substep midpoint.
 
 `integrator="im-cdm1"` holds the initial TDHF density matrix fixed during one
 full implicit-midpoint step. `integrator="im-cdm2"` predicts the midpoint
-with one IM-CDM1 half-step and then restarts from the initial orbitals for two
-corrector half-steps with the predicted density fixed. The one-half-step
-predictor is part of the IM-CDM2 definition; `predictor_steps` therefore
-defaults to and must remain one.
+with one IM-CDM1 half-step and then restarts from the initial orbitals with
+the predicted density fixed. Its corrector uses two half-steps by default;
+`corrector_steps=1` selects one whole corrector step.
 
 IM-CDM supports both canonical and orthogonal orbital gauges. The canonical
 gauge follows the constant-density formulation directly and is generally the

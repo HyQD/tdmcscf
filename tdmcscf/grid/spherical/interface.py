@@ -10,7 +10,7 @@ import warnings
 import numpy as np
 from grid_lib.spherical_coordinates.utils import mask_function
 
-from integrator_lib import CNCMF1, CNCMF2, CrankNicolson, RK4, Strang2
+from integrator_lib import IMCMF1, IMCMF2, CrankNicolson, RK4, Strang2
 from tdmcscf.systems import SphericalElectronicSystem
 
 from ._validation import _integer, _positive_real
@@ -245,10 +245,10 @@ class SphericalTDHF:
     normalized by this interface.
 
     The supported propagation methods are ``"strang2"``, ``"rk4"``,
-    ``"cn-cmf1"``, ``"cn-cmf2"``, ``"im-cdm1"``, and ``"im-cdm2"``.
+    ``"im-cmf1"``, ``"im-cmf2"``, ``"im-cdm1"``, and ``"im-cdm2"``.
     Strang2 uses preconditioned Crank--Nicolson for the linear one-body steps
     and RK4 for the nonlinear step. RK4 rebuilds the mean fields at every
-    stage. The CN-CMF methods freeze orbital-pair mean fields, while the
+    stage. The IM-CMF methods freeze orbital-pair mean fields, while the
     IM-CDM methods freeze the density matrix entering the Fock operator.
     """
 
@@ -542,19 +542,18 @@ class SphericalTDHF:
         )
         return CrankNicolson(preconditioner=preconditioner, **options)
 
-    def _predictor_corrector_integrator(self, options, predictor_steps):
-        predictor_step = self.time_step / (2 * predictor_steps)
+    def _predictor_corrector_integrator(self, options, corrector_steps):
         self.predictor_crank_nicolson = self._crank_nicolson(
-            predictor_step, options
-        )
-        self.corrector_crank_nicolson = self._crank_nicolson(
             self.time_step / 2, options
         )
+        self.corrector_crank_nicolson = self._crank_nicolson(
+            self.time_step / corrector_steps, options
+        )
         self.crank_nicolson = self.corrector_crank_nicolson
-        return CNCMF2(
+        return IMCMF2(
             self.predictor_crank_nicolson,
             self.corrector_crank_nicolson,
-            predictor_steps=predictor_steps,
+            corrector_steps=corrector_steps,
         )
 
     def _make_integrator(self):
@@ -564,33 +563,26 @@ class SphericalTDHF:
                 "The preconditioner is constructed from the core Hamiltonian "
                 "and cannot be overridden."
             )
-        self.predictor_steps = None
+        self.corrector_steps = None
         if self.integrator_name == "strang2":
             self.crank_nicolson = self._crank_nicolson(
                 self.time_step / 2, options
             )
             return Strang2(self.crank_nicolson, RK4())
-        if self.integrator_name in {"cn-cmf1", "im-cdm1"}:
+        if self.integrator_name in {"im-cmf1", "im-cdm1"}:
             self.crank_nicolson = self._crank_nicolson(
                 self.time_step, options
             )
-            return CNCMF1(self.crank_nicolson)
-        if self.integrator_name == "cn-cmf2":
-            self.predictor_steps = _positive_integer(
-                options.pop("predictor_steps", 2), "predictor_steps"
+            return IMCMF1(self.crank_nicolson)
+        if self.integrator_name in {"im-cmf2", "im-cdm2"}:
+            self.corrector_steps = _positive_integer(
+                options.pop("corrector_steps", 2), "corrector_steps"
             )
-            if self.predictor_steps not in {1, 2}:
-                raise ValueError("predictor_steps must be 1 or 2.")
+            if self.corrector_steps not in {1, 2}:
+                raise ValueError("corrector_steps must be 1 or 2.")
             return self._predictor_corrector_integrator(
-                options, self.predictor_steps
+                options, self.corrector_steps
             )
-        if self.integrator_name == "im-cdm2":
-            self.predictor_steps = _positive_integer(
-                options.pop("predictor_steps", 1), "predictor_steps"
-            )
-            if self.predictor_steps != 1:
-                raise ValueError("IM-CDM2 requires predictor_steps=1.")
-            return self._predictor_corrector_integrator(options, 1)
         if self.integrator_name == "rk4":
             if options:
                 raise ValueError("RK4 does not accept integrator_options.")
@@ -609,7 +601,7 @@ class SphericalTDHF:
             )
             return RK4()
         choices = (
-            "'strang2', 'rk4', 'cn-cmf1', 'cn-cmf2', 'im-cdm1', "
+            "'strang2', 'rk4', 'im-cmf1', 'im-cmf2', 'im-cdm1', "
             "or 'im-cdm2'"
         )
         raise ValueError(f"integrator must be {choices}.")
@@ -719,7 +711,7 @@ class SphericalTDHF:
                 self.equation.linear_rhs,
                 self.equation.nonlinear_rhs,
             )
-        elif self.integrator_name in {"cn-cmf1", "cn-cmf2"}:
+        elif self.integrator_name in {"im-cmf1", "im-cmf2"}:
             result = self.integrator(
                 orbitals,
                 time,
@@ -785,7 +777,7 @@ class SphericalTDHF:
             "field_gauge": self.field_gauge,
             "orbital_gauge": self.orbital_gauge,
             "integrator": self.integrator_name,
-            "predictor_steps": self.predictor_steps,
+            "corrector_steps": self.corrector_steps,
             "particle_charge": self.particle_charge,
             "initial_time": self.initial_time,
             "final_time": self.final_time,
@@ -833,8 +825,10 @@ class SphericalTDHF:
             expected = getattr(self, attribute)
             if metadata[name] != expected:
                 raise ValueError(f"The checkpoint has a different {name} setting.")
-        if metadata.get("predictor_steps") != self.predictor_steps:
-            raise ValueError("The checkpoint uses a different predictor_steps setting.")
+        if metadata.get("corrector_steps") != self.corrector_steps:
+            raise ValueError(
+                "The checkpoint uses a different corrector_steps setting."
+            )
         if not np.isclose(metadata["time_step"], self.time_step):
             raise ValueError("The checkpoint uses a different time step.")
         if checkpoint.step < 0 or checkpoint.step > self.n_steps:
