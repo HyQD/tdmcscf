@@ -28,6 +28,10 @@ The [high-level spherical TDHF interface](docs/spherical_tdhf_interface.md)
 configures ground-state initialization, fields, Strang2, RK4, IM-CMF, or
 IM-CDM propagation, sampling, radial masks, and restartable checkpoints.
 
+The [spherical TDKS interface](docs/spherical_tdks.md) provides the analogous
+adiabatic propagation workflow for spin-unpolarized local density
+functionals, including LDA-VWN5 and configurable X-alpha approximations.
+
 ## Requirements
 
 Runtime requirements match `HyQD-grid-lib`: Python >=3.12,<3.15,

@@ -253,6 +253,9 @@ class SphericalTDHF:
     """
 
     _BUILTIN_SAMPLERS = {"orbital_norms", "position_expectations"}
+    checkpoint_type = TDHFCheckpoint
+    result_type = TDHFResult
+    progress_label = "TDHF propagation"
 
     def __init__(
         self,
@@ -787,6 +790,10 @@ class SphericalTDHF:
             "sample_names": list(sample_names),
         }
 
+    def _result_metadata(self):
+        """Additional fields passed to the propagation result."""
+        return {}
+
     def _write_checkpoint(self, path, step, orbitals, times, samples):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -809,8 +816,8 @@ class SphericalTDHF:
         temporary.replace(path)
 
     def _restore(self, checkpoint):
-        if not isinstance(checkpoint, TDHFCheckpoint):
-            checkpoint = TDHFCheckpoint.load(checkpoint)
+        if not isinstance(checkpoint, self.checkpoint_type):
+            checkpoint = self.checkpoint_type.load(checkpoint)
         different_nodes = not np.array_equal(
             checkpoint.grid_nodes, self.grid.nodes
         )
@@ -869,7 +876,7 @@ class SphericalTDHF:
         if progress:
             from tqdm.auto import tqdm
 
-            steps = tqdm(steps, desc="TDHF propagation")
+            steps = tqdm(steps, desc=self.progress_label)
         for step in steps:
             orbitals = self._advance(orbitals, self.propagation_times[step])
             completed = step + 1
@@ -906,7 +913,7 @@ class SphericalTDHF:
                 sampled_times,
                 samples,
             )
-        return TDHFResult(
+        return self.result_type(
             system=self.system,
             grid=self.grid,
             initial_orbitals=self.initial_orbitals.copy(),
@@ -923,4 +930,5 @@ class SphericalTDHF:
             orbital_gauge=self.orbital_gauge,
             integrator=self.integrator_name,
             particle_charge=self.particle_charge,
+            **self._result_metadata(),
         )

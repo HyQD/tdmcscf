@@ -19,12 +19,19 @@ from .kohn_sham import (
     SphericalKohnSham,
 )
 from .mean_fields import MeanFieldPotential, SphericalMeanFieldBuilder
+from .local_density import SphericalXCBuilder, SphericalXCPotential
 from .potentials import SphericalCoulombPotential, SphericalRadialPotential
 from .preconditioners import (
     ShiftedAtomicCorePreconditioner,
     ShiftedSphericalCorePreconditioner,
 )
 from .tdhf import SphericalRestrictedTDHF
+from .tdks import SphericalRestrictedTDKS
+from .tdks_interface import (
+    SphericalTDKS,
+    TDKSCheckpoint,
+    TDKSResult,
+)
 from .interface import (
     RadialCosineMask,
     SphericalTDHF,
@@ -51,9 +58,13 @@ __all__ = [
     "SphericalDipoleField",
     "SphericalHartreeFock",
     "SphericalMeanFieldBuilder",
+    "SphericalRestrictedTDKS",
     "SphericalRadialPotential",
     "SphericalRestrictedTDHF",
     "SphericalTDHF",
+    "SphericalTDKS",
+    "SphericalXCBuilder",
+    "SphericalXCPotential",
     "SphericalKineticEnergy",
     "SphericalKohnSham",
     "make_atomic_femdvr_grid",
@@ -61,5 +72,7 @@ __all__ = [
     "RadialCosineMask",
     "TDHFCheckpoint",
     "TDHFResult",
+    "TDKSCheckpoint",
+    "TDKSResult",
     "estimate_rk4_time_step",
 ]
