@@ -16,6 +16,10 @@ harmonic-oscillator, Gaussian-well, and custom central potentials. The
 [atomic Hartree--Fock interface](docs/spherical_hartree_fock.md) is retained as
 a convenience wrapper around the general symmetry-adapted radial solver.
 
+The [spin-unpolarized spherical Kohn--Sham solver](docs/spherical_kohn_sham.md)
+supports configurable local functionals, including Dirac exchange, Slater
+X-alpha exchange, VWN5 correlation, and the combined LDA-VWN5 approximation.
+
 The [electric-dipole field operators](docs/spherical_dipole_fields.md) apply
 length- and velocity-gauge interactions with arbitrary Cartesian polarization
 and sums of temporal profiles from `electromagnetic_fields`.
