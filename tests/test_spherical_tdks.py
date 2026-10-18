@@ -122,3 +122,42 @@ def test_one_density_frozen_midpoint_step_preserves_norm(radial_grid):
         tdks.freeze_rhs(orbitals),
     )
     np.testing.assert_allclose(tdks.orbital_norms(propagated), 1.0, atol=3e-11)
+
+
+def test_fixed_m_frozen_rhs_accepts_full_space_krylov_vectors(radial_grid):
+    core = AtomicCoreHamiltonian(radial_grid, 1, m_max=1, Z=2)
+    hartree = SphericalMeanFieldBuilder(
+        radial_grid, 1, m_max=1, L_max=2, M_max=2
+    )
+    xc = SphericalXCBuilder(
+        radial_grid, 1, m_max=1, functional=LDAVWN()
+    )
+    tdks = SphericalRestrictedTDKS(
+        core,
+        hartree,
+        xc,
+        orbital_gauge="canonical",
+        orbital_m=[0],
+    )
+    reference = normalized_orbitals(core)
+    channel_m = np.array([m for _, m in core.orbital_lm])
+    reference[:, :, channel_m != 0] = 0.0
+    reference /= np.sqrt(tdks.orbital_norms(reference))[:, None, None]
+
+    frozen = tdks.freeze_rhs(reference)
+    full_space_trial = normalized_orbitals(core, seed=43)
+    projected_trial = full_space_trial.copy()
+    projected_trial[:, :, channel_m != 0] = 0.0
+    actual = frozen(full_space_trial, 0.2)
+    expected = frozen(projected_trial, 0.2)
+    np.testing.assert_allclose(actual, expected, atol=3e-12)
+    np.testing.assert_array_equal(actual[:, :, channel_m != 0], 0.0)
+
+    propagated = CrankNicolson(rtol=1e-12, atol=1e-14)(
+        reference,
+        0.0,
+        0.01,
+        frozen,
+    )
+    np.testing.assert_array_equal(propagated[:, :, channel_m != 0], 0.0)
+    np.testing.assert_allclose(tdks.orbital_norms(propagated), 1.0, atol=3e-11)
