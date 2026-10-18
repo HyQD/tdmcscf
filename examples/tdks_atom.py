@@ -21,9 +21,9 @@ n_points = [11, 11, 11, 11]
 
 # Orbital, Hartree, and local-XC angular controls.
 l_max = 4
-m_max = 4
+m_max = 0
 L_max = 2 * l_max
-M_max = L_max
+M_max = 2 * m_max
 xc_angular_bandlimit = 4 * l_max
 
 # The functional is used for both the initial Kohn-Sham ground state and the
@@ -32,7 +32,7 @@ functional = LDAVWN()
 
 # The electromagnetic and occupied-orbital gauges are independent choices.
 field_gauge = "velocity"  # "velocity" or "length"
-orbital_gauge = "canonical"  # "orthogonal" or "canonical"
+orbital_gauge = "orthogonal"  # "orthogonal" or "canonical"
 
 # One-cycle sine-square pulse, linearly polarized along z. Polarization vectors
 # are normalized internally, so their magnitude does not rescale E0.
@@ -151,7 +151,7 @@ for p, (numbers, orbital_axes) in enumerate(zip(quantum_numbers, position_axes))
     orbital_axes.set_ylabel(r"$\langle z\rangle_p$ (bohr)")
     orbital_axes.legend()
     norm_error = np.abs(1.0 - orbital_norms[:, p])
-    norm_axes.semilogy(result.times, norm_error, ".", label=label)
+    norm_axes.semilogy(result.times, norm_error, label=label)
 
 dipole_axes.set_ylabel(r"$d_z(t)$ (a.u.)")
 dipole_axes.set_title(f"Dipole response of {system.label}")
