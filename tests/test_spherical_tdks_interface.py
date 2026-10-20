@@ -1,14 +1,14 @@
 import numpy as np
 import pytest
 
-from tdmcscf.dft import LDAVWN, XAlphaExchange
+from tdmcscf.dft import LDAVWN, PBE, XAlphaExchange
 from tdmcscf.grid.spherical import (
     RadialCosineMask,
     SphericalKohnSham,
     SphericalTDKS,
     TDKSCheckpoint,
 )
-from tdmcscf.systems import HarmonicOscillator
+from tdmcscf.systems import Atomic, HarmonicOscillator
 
 
 class ConstantField:
@@ -53,6 +53,7 @@ def test_ground_state_setup_and_tdkohn_sham_propagation(calculation):
     assert calculation.ground_state.converged
     assert calculation.ground_state.functional.name == "LDA-VWN5"
     assert calculation.xc_angular_bandlimit == 4
+    assert calculation.xc_quadrature_order is None
     assert calculation.m_conserved
     assert calculation.equation.orbital_m == (0,)
 
@@ -77,6 +78,7 @@ def test_ground_state_setup_and_tdkohn_sham_propagation(calculation):
     assert result.total_dipole.shape == (3, 3)
     assert result.functional is calculation.functional
     assert result.xc_angular_bandlimit == 4
+    assert result.xc_quadrature_order is None
 
 
 def test_kohn_sham_result_can_be_embedded_in_larger_angular_space(calculation):
@@ -181,3 +183,63 @@ def test_rejects_insufficient_xc_angular_bandlimit(calculation):
             time_step=0.01,
             final_time=0.02,
         )
+
+
+def test_high_level_pbe_propagation(calculation):
+    propagated = SphericalTDKS(
+        calculation.system,
+        functional=PBE(),
+        nodes=calculation.grid.nodes,
+        n_points=calculation.grid.n_points,
+        l_max=1,
+        m_max=1,
+        initial_state=calculation.initial_orbitals,
+        integrator="strang2",
+        integrator_options={"solver": "gmres", "rtol": 1e-11},
+        time_step=0.01,
+        final_time=0.01,
+    )
+    result = propagated.run()
+    assert result.functional.name == "PBE"
+    assert propagated.xc._differential is not None
+    np.testing.assert_array_equal(
+        result.xc_quadrature_order,
+        2 * calculation.grid.n_points,
+    )
+    np.testing.assert_allclose(result.orbital_norms, 1.0, atol=5e-10)
+
+
+def test_pbe_ground_state_is_stationary_in_orthogonal_gauge():
+    calculation = SphericalTDKS(
+        Atomic("He"),
+        functional=PBE(),
+        nodes=[0.0, 3.0, 6.0, 9.0],
+        n_points=13,
+        l_max=1,
+        m_max=0,
+        L_max=2,
+        M_max=0,
+        initial_state="groundstate",
+        ground_state_options={
+            "poisson_method": "solve",
+            "max_iterations": 100,
+            "conv_tol_grad": 1e-9,
+        },
+        orbital_gauge="orthogonal",
+        time_step=0.001,
+        final_time=0.001,
+    )
+    orbitals = calculation.initial_orbitals
+    derivative = calculation.equation.linear_rhs(orbitals, 0.0)
+    derivative += calculation.equation.nonlinear_rhs(orbitals, 0.0)
+    residual_norm = np.sqrt(
+        np.sum(
+            calculation.grid.weights[None, 1:-1, None]
+            * np.abs(derivative) ** 2
+        )
+    )
+    assert residual_norm < 5e-9
+    np.testing.assert_array_equal(
+        calculation.xc_quadrature_order,
+        calculation.ground_state.xc_quadrature_order,
+    )

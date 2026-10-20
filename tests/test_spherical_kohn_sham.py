@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from tdmcscf.dft import LDAVWN, XAlphaExchange
+from tdmcscf.dft import LDAVWN, PBE, XAlphaExchange
 from tdmcscf.grid.spherical import (
     SphericalAtomicKohnSham,
     SphericalKohnSham,
@@ -63,6 +63,8 @@ def test_helium_lda_vwn_ground_state_and_energy_decomposition():
     )
     assert result.configuration.symbol == "He"
     assert result.functional.name == "LDA-VWN5"
+    assert result.initial_guess == "core"
+    assert result.xc_quadrature_order is None
 
 
 def test_kohn_sham_matrices_are_hermitian_in_radial_metric():
@@ -135,3 +137,98 @@ def test_solver_rejects_an_invalid_functional():
         SphericalAtomicKohnSham(
             "He", functional=object(), r_max=10, n_elements=2, n_points=7
         )
+
+
+@pytest.mark.parametrize("initial_guess", [None, "unknown"])
+def test_solver_rejects_an_invalid_initial_guess(initial_guess):
+    error = TypeError if initial_guess is None else ValueError
+    with pytest.raises(error, match="initial_guess"):
+        SphericalAtomicKohnSham(
+            "He",
+            functional=LDAVWN(),
+            r_max=10,
+            n_elements=2,
+            n_points=7,
+            initial_guess=initial_guess,
+        )
+
+
+def test_semilocal_solver_rejects_insufficient_xc_quadrature():
+    with pytest.raises(ValueError, match="at least n_points"):
+        SphericalAtomicKohnSham(
+            "He",
+            functional=PBE(),
+            **HELIUM_GRID,
+            xc_quadrature_order=12,
+        )
+
+
+def test_helium_pbe_ground_state_and_density_gradient():
+    solver = SphericalAtomicKohnSham(
+        "He",
+        functional=PBE(),
+        **HELIUM_GRID,
+        max_iterations=40,
+        conv_tol_grad=1e-9,
+    )
+    result = solver.solve()
+    assert result.converged
+    assert result.energy == pytest.approx(-2.8929348668321, abs=3e-11)
+    assert result.functional.name == "PBE"
+    assert result.initial_guess == "lda"
+    np.testing.assert_array_equal(result.xc_quadrature_order, [26, 26, 26, 26])
+    assert result.density_gradient_squared.shape == result.density.shape
+    assert np.all(result.density_gradient_squared >= 0)
+    assert np.all(np.isfinite(result.xc_potential))
+    assert result.xc_matrix.shape == (len(solver.r), len(solver.r))
+    weighted_xc = solver.radial_weights[:, None] * result.xc_matrix
+    np.testing.assert_allclose(weighted_xc, weighted_xc.T, atol=2e-12)
+
+
+def test_pbe_weak_matrix_is_discrete_xc_energy_derivative():
+    solver = SphericalAtomicKohnSham(
+        "He", functional=PBE(), **HELIUM_GRID, max_iterations=40
+    )
+    result = solver.solve()
+    orbital = result.radial_orbitals[0][0]
+    direction = np.sin(np.linspace(0.0, np.pi, len(solver.r)))
+    expected = 4.0 * np.dot(
+        solver.radial_weights * direction,
+        result.xc_matrix @ orbital,
+    ).real
+
+    def xc_energy(values):
+        state = solver._assemble({0: values[None, :]})
+        return state["xc_energy"]
+
+    step = 1e-6
+    finite_difference = (
+        xc_energy(orbital + step * direction)
+        - xc_energy(orbital - step * direction)
+    ) / (2.0 * step)
+    assert finite_difference == pytest.approx(expected, abs=5e-10)
+
+
+@pytest.mark.parametrize(
+    ("atom", "expected_energy"),
+    [
+        ("Ne", -128.8664391466599),
+        ("Mg", -199.9553089506940),
+    ],
+)
+def test_pbe_weak_form_converges_smoothly_for_closed_shell_atoms(
+    atom, expected_energy
+):
+    result = SphericalAtomicKohnSham(
+        atom,
+        functional=PBE(),
+        nodes=np.linspace(0.0, 20.0, 11),
+        n_points=21,
+        max_iterations=40,
+        conv_tol_grad=1e-8,
+        initial_guess="auto",
+        poisson_method="solve",
+    ).solve()
+    assert result.converged
+    assert result.iterations < 15
+    assert result.energy == pytest.approx(expected_energy, abs=3e-10)

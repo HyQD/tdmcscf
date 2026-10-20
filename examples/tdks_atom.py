@@ -1,10 +1,10 @@
-"""Propagate a closed-shell atom with adiabatic LDA-VWN TDKS."""
+"""Propagate a closed-shell atom with adiabatic spin-unpolarized TDKS."""
 
 import matplotlib.pyplot as plt
 import numpy as np
 from electromagnetic_fields.dipole_fields import SineSquareLaser
 
-from tdmcscf.dft import LDAVWN
+from tdmcscf.dft import LDAVWN, PBE
 from tdmcscf.grid.spherical import RadialCosineMask, SphericalTDKS
 from tdmcscf.systems import Atomic, atomic_configurations
 
@@ -25,9 +25,12 @@ m_max = 0
 L_max = 2 * l_max
 M_max = 2 * m_max
 xc_angular_bandlimit = 4 * l_max
+# None selects twice n_points in each element for semilocal functionals.
+xc_quadrature_order = None
 
 # The functional is used for both the initial Kohn-Sham ground state and the
-# instantaneous adiabatic XC potential during propagation.
+# instantaneous adiabatic XC potential during propagation. PBE() may be used
+# here for the standard generalized-gradient approximation.
 functional = LDAVWN()
 
 # The electromagnetic and occupied-orbital gauges are independent choices.
@@ -49,7 +52,7 @@ pulse = SineSquareLaser(
 )
 
 # Propagation controls. IM-CMF and IM-CDM freeze the same density-dependent
-# local Hartree-XC potential in TDKS; both names remain available so the
+# Hartree-XC operator in TDKS; both names remain available so the
 # interface matches SphericalTDHF.
 integrator = "im-cmf2"
 # Choices: "strang2", "rk4", "im-cmf1", "im-cmf2", "im-cdm1", "im-cdm2"
@@ -84,6 +87,7 @@ calculation = SphericalTDKS(
     L_max=L_max,
     M_max=M_max,
     xc_angular_bandlimit=xc_angular_bandlimit,
+    xc_quadrature_order=xc_quadrature_order,
     poisson_method="solve",
     initial_state="groundstate",
     ground_state_options={
@@ -127,6 +131,10 @@ print(f"{'Points per element':<26}: {n_points}")
 print(f"{'(l_max, m_max)':<26}: ({l_max}, {m_max})")
 print(f"{'(L_max, M_max)':<26}: ({L_max}, {M_max})")
 print(f"{'XC angular bandlimit':<26}: {xc_angular_bandlimit}")
+print(
+    f"{'XC radial quadrature':<26}: "
+    f"{calculation.xc_quadrature_order}"
+)
 print(f"{'Pulse duration':<26}: {duration:.12f} a.u.")
 print(f"{'Time step':<26}: {result.time_step:.12f} a.u.")
 print(f"{'Number of steps':<26}: {result.n_steps}")
