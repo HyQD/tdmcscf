@@ -2,13 +2,16 @@
 
 from dataclasses import dataclass
 
+import numpy as np
+
 from tdmcscf.systems import SphericalElectronicSystem
 
 from ._validation import _integer
 from .interface import SphericalTDHF, TDHFCheckpoint, TDHFResult
-from .kohn_sham import KohnShamResult, SphericalKohnSham, _local_functional
+from .kohn_sham import KohnShamResult, SphericalKohnSham
 from .local_density import SphericalXCBuilder
 from .tdks import SphericalRestrictedTDKS
+from .xc import _local_functional
 
 
 def _functional_metadata(functional):
@@ -39,6 +42,7 @@ class TDKSResult(TDHFResult):
 
     functional: object
     xc_angular_bandlimit: int
+    xc_quadrature_order: np.ndarray | None
 
 
 class SphericalTDKS(SphericalTDHF):
@@ -52,7 +56,9 @@ class SphericalTDKS(SphericalTDHF):
 
     ``xc_angular_bandlimit`` controls the angular grid used for nonlinear XC
     evaluation and projection. It defaults to ``4*l_max`` and must be at
-    least ``2*l_max``.
+    least ``2*l_max``. For semilocal functionals, ``xc_quadrature_order``
+    controls radial overintegration and defaults to twice the number of
+    FEM-DVR points in each element.
     """
 
     checkpoint_type = TDKSCheckpoint
@@ -65,12 +71,14 @@ class SphericalTDKS(SphericalTDHF):
         *,
         functional,
         xc_angular_bandlimit=None,
+        xc_quadrature_order=None,
         **kwargs,
     ):
         if not isinstance(system, SphericalElectronicSystem):
             raise TypeError("system must be a SphericalElectronicSystem.")
         self.functional = _local_functional(functional)
         self._requested_xc_angular_bandlimit = xc_angular_bandlimit
+        self._requested_xc_quadrature_order = xc_quadrature_order
         requested_l_max = kwargs.get("l_max")
         effective_l_max = (
             system.occupied_l_max
@@ -102,7 +110,21 @@ class SphericalTDKS(SphericalTDHF):
             self.m_max,
             functional=self.functional,
             angular_bandlimit=self.xc_angular_bandlimit,
+            xc_quadrature_order=self._requested_xc_quadrature_order,
         )
+        self.xc_quadrature_order = self.xc.xc_quadrature_order
+        if (
+            self.ground_state is not None
+            and self.ground_state.xc_quadrature_order is not None
+            and not np.array_equal(
+                self.xc_quadrature_order,
+                self.ground_state.xc_quadrature_order,
+            )
+        ):
+            raise ValueError(
+                "The Kohn-Sham result uses a different "
+                "xc_quadrature_order."
+            )
         self.equation = SphericalRestrictedTDKS(
             self.core,
             self.mean_fields,
@@ -125,6 +147,7 @@ class SphericalTDKS(SphericalTDHF):
                 "n_points",
                 "l_max",
                 "m_max",
+                "xc_quadrature_order",
             }
             duplicate = reserved.intersection(settings)
             if duplicate:
@@ -134,6 +157,9 @@ class SphericalTDKS(SphericalTDHF):
                     f"{names}."
                 )
             settings.setdefault("poisson_method", self.poisson_method)
+            settings["xc_quadrature_order"] = (
+                self._requested_xc_quadrature_order
+            )
             solver = SphericalKohnSham(
                 self.system,
                 functional=self.functional,
@@ -149,6 +175,19 @@ class SphericalTDKS(SphericalTDHF):
             self.ground_state = result
             values = result.orbitals
         elif isinstance(initial_state, KohnShamResult):
+            if _functional_metadata(initial_state.functional) != (
+                _functional_metadata(self.functional)
+            ):
+                raise ValueError(
+                    "The Kohn-Sham result uses a different XC functional."
+                )
+            if (
+                self._requested_xc_quadrature_order is None
+                and initial_state.xc_quadrature_order is not None
+            ):
+                self._requested_xc_quadrature_order = (
+                    initial_state.xc_quadrature_order.copy()
+                )
             self.ground_state = initial_state
             values = self._expand_hartree_fock_result(initial_state)
         else:
@@ -167,6 +206,11 @@ class SphericalTDKS(SphericalTDHF):
                 "method": "TDKS",
                 "functional": _functional_metadata(self.functional),
                 "xc_angular_bandlimit": self.xc_angular_bandlimit,
+                "xc_quadrature_order": (
+                    None
+                    if self.xc_quadrature_order is None
+                    else self.xc_quadrature_order.tolist()
+                ),
             }
         )
         return metadata
@@ -184,10 +228,25 @@ class SphericalTDKS(SphericalTDHF):
             raise ValueError(
                 "The checkpoint uses a different xc_angular_bandlimit."
             )
+        checkpoint_order = checkpoint.metadata.get("xc_quadrature_order")
+        expected_order = (
+            None
+            if self.xc_quadrature_order is None
+            else self.xc_quadrature_order.tolist()
+        )
+        if checkpoint_order != expected_order:
+            raise ValueError(
+                "The checkpoint uses a different xc_quadrature_order."
+            )
         return super()._restore(checkpoint)
 
     def _result_metadata(self):
         return {
             "functional": self.functional,
             "xc_angular_bandlimit": self.xc_angular_bandlimit,
+            "xc_quadrature_order": (
+                None
+                if self.xc_quadrature_order is None
+                else self.xc_quadrature_order.copy()
+            ),
         }

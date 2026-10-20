@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from grid_lib.pseudospectral_grids.femdvr import FEMDVR
 
+from tdmcscf.dft import LDAVWN
 from tdmcscf.systems import (
     Atomic,
     AtomicConfiguration,
@@ -14,6 +15,14 @@ from tdmcscf.systems import (
 
 from .atomic_core import AtomicCoreHamiltonian
 from .hartree_fock import SCFIteration, SphericalHartreeFock
+from .xc import (
+    _functional_values,
+    _local_functional,
+    _make_xc_quadrature,
+    _quadrature_orders,
+    _requires_gradient,
+    evaluate_spherical_functional,
+)
 
 
 @dataclass
@@ -36,10 +45,14 @@ class KohnShamResult:
     coulomb_l_max: int
     poisson_method: str
     functional: object
+    initial_guess: str
+    xc_quadrature_order: np.ndarray | None
     density: np.ndarray
     radial_density: np.ndarray
+    density_gradient_squared: np.ndarray | None
     hartree_potential: np.ndarray
     xc_potential: np.ndarray
+    xc_matrix: np.ndarray
     kinetic_energy: float
     external_energy: float
     hartree_energy: float
@@ -53,27 +66,6 @@ class AtomicKohnShamResult(KohnShamResult):
     configuration: AtomicConfiguration
 
 
-def _functional_values(functional, density):
-    values = functional.evaluate(density)
-    for name in ("energy_density", "potential"):
-        array = np.asarray(getattr(values, name, None))
-        if array.shape != density.shape or np.iscomplexobj(array) or not np.all(
-            np.isfinite(array)
-        ):
-            raise ValueError(
-                "functional.evaluate(density) must return finite real "
-                "energy_density and potential arrays matching density."
-            )
-    return values
-
-
-def _local_functional(functional):
-    if not callable(getattr(functional, "evaluate", None)):
-        raise TypeError("functional must provide evaluate(density).")
-    _functional_values(functional, np.array([0.0, 1.0]))
-    return functional
-
-
 class SphericalKohnSham(SphericalHartreeFock):
     r"""Spin-unpolarized closed-shell Kohn--Sham solver.
 
@@ -83,10 +75,11 @@ class SphericalKohnSham(SphericalHartreeFock):
 
     ``H_l = T_l + V_ext + V_H[n] + V_xc[n]``.
 
-    ``functional`` is a coordinate-independent local functional acting on
-    the total spin-summed density.  It must provide ``evaluate(density)`` and
-    return pointwise ``energy_density`` and ``potential`` arrays.  The
-    built-in choices live in :mod:`tdmcscf.dft`.
+    ``functional`` is a coordinate-independent local or semilocal functional
+    acting on the total spin-summed density. Local functionals return their
+    pointwise energy density and potential. Semilocal functionals return the
+    partial derivatives used to construct a quadrature-consistent Euler
+    potential. The built-in choices live in :mod:`tdmcscf.dft`.
 
     The remaining grid, representation, and SCF controls have the same
     meaning as for :class:`SphericalHartreeFock`.  Only the ``L=0`` Coulomb
@@ -114,8 +107,20 @@ class SphericalKohnSham(SphericalHartreeFock):
         diis=True,
         diis_start=3,
         diis_size=8,
+        initial_guess="auto",
+        xc_quadrature_order=None,
     ):
         self.functional = _local_functional(functional)
+        if not isinstance(initial_guess, str):
+            raise TypeError("initial_guess must be 'auto', 'core', or 'lda'.")
+        normalized_guess = initial_guess.lower().replace("_", "-")
+        if normalized_guess not in {"auto", "core", "lda"}:
+            raise ValueError("initial_guess must be 'auto', 'core', or 'lda'.")
+        if normalized_guess == "auto":
+            normalized_guess = (
+                "lda" if _requires_gradient(self.functional) else "core"
+            )
+        self.initial_guess = normalized_guess
         self._last_ks_state = None
         super().__init__(
             system,
@@ -135,6 +140,45 @@ class SphericalKohnSham(SphericalHartreeFock):
             diis_start=diis_start,
             diis_size=diis_size,
         )
+        self.xc_quadrature_order = None
+        self._xc_quadrature = ()
+        if _requires_gradient(self.functional):
+            self.xc_quadrature_order = _quadrature_orders(
+                xc_quadrature_order, self.grid.n_points
+            )
+            self._xc_quadrature = _make_xc_quadrature(
+                self.grid, self.xc_quadrature_order
+            )
+
+    def _initial_orbitals(self):
+        if self.initial_guess == "core":
+            return super()._initial_orbitals()
+
+        gradient_tolerance = self.conv_tol_grad
+        if gradient_tolerance is not None:
+            gradient_tolerance = max(gradient_tolerance, 1e-8)
+        lda_solver = SphericalKohnSham(
+            self.system,
+            functional=LDAVWN(),
+            nodes=self.grid.nodes,
+            n_points=self.grid.n_points,
+            l_max=self.l_max,
+            m_max=self.m_max,
+            poisson_method=self.poisson_method,
+            max_iterations=self.max_iterations,
+            conv_tol_e=self.conv_tol_e,
+            conv_tol_grad=gradient_tolerance,
+            damping=self.damping,
+            diis=self.diis,
+            diis_start=self.diis_start,
+            diis_size=self.diis_size,
+            initial_guess="core",
+        )
+        lda_result = lda_solver.solve()
+        return {
+            l: values * self._sqrt_weights[None, :]
+            for l, values in lda_result.radial_orbitals.items()
+        }
 
     def _checked_radial_orbitals(self, radial_orbitals):
         if not isinstance(radial_orbitals, dict):
@@ -166,6 +210,110 @@ class SphericalKohnSham(SphericalHartreeFock):
         """Return the physical spin-summed density ``n(r)``."""
         return self.radial_density(radial_orbitals) / (4.0 * np.pi * self.r**2)
 
+    def _radial_density_derivative(self, radial_orbitals, radial_density):
+        """Differentiate the physical density through reduced orbitals."""
+        derivative = self.grid.D1[1:-1, 1:-1]
+        radial_density_derivative = np.zeros(len(self.r))
+        for l, orbitals in radial_orbitals.items():
+            orbital_derivatives = orbitals @ derivative.T
+            radial_density_derivative += 4.0 * (2 * l + 1) * np.sum(
+                np.real(orbitals.conj() * orbital_derivatives), axis=0
+            )
+        return (
+            radial_density_derivative - 2.0 * radial_density / self.r
+        ) / (4.0 * np.pi * self.r**2)
+
+    def _semilocal_xc(self, radial_orbitals, radial_density, density):
+        """Return the weak-form GGA matrix and diagnostic Euler potential."""
+        full_orbitals = {}
+        for l, orbitals in radial_orbitals.items():
+            full = np.zeros(
+                (len(orbitals), len(self.grid.r)), dtype=np.complex128
+            )
+            full[:, 1:-1] = orbitals
+            full_orbitals[l] = full
+
+        weak_matrix = np.zeros((len(self.grid.r), len(self.grid.r)))
+        energy = 0.0
+        for quadrature in self._xc_quadrature:
+            radial = np.zeros(len(quadrature.r))
+            radial_derivative = np.zeros(len(quadrature.r))
+            for l, orbitals in full_orbitals.items():
+                local = orbitals[:, quadrature.indices]
+                values = local @ quadrature.basis.T
+                derivatives = local @ quadrature.basis_derivative.T
+                degeneracy = 2.0 * (2 * l + 1)
+                radial += degeneracy * np.sum(np.abs(values) ** 2, axis=0)
+                radial_derivative += 2.0 * degeneracy * np.sum(
+                    np.real(values.conj() * derivatives), axis=0
+                )
+
+            quadrature_density = radial / (4.0 * np.pi * quadrature.r**2)
+            quadrature_density_derivative = (
+                radial_derivative - 2.0 * radial / quadrature.r
+            ) / (4.0 * np.pi * quadrature.r**2)
+            evaluated = _functional_values(
+                self.functional,
+                quadrature_density,
+                quadrature_density_derivative**2,
+            )
+            density_part = np.asarray(evaluated.density_derivative)
+            flux = (
+                2.0
+                * np.asarray(evaluated.sigma_derivative)
+                * quadrature_density_derivative
+            )
+            basis = quadrature.basis
+            basis_derivative = quadrature.basis_derivative
+            weights = quadrature.weights
+            local_matrix = basis.T @ (
+                (weights * density_part)[:, None] * basis
+            )
+            local_matrix += basis_derivative.T @ (
+                (weights * flux)[:, None] * basis
+            )
+            local_matrix += basis.T @ (
+                (weights * flux)[:, None] * basis_derivative
+            )
+            local_matrix -= basis.T @ (
+                (2.0 * weights * flux / quadrature.r)[:, None] * basis
+            )
+            weak_matrix[np.ix_(quadrature.indices, quadrature.indices)] += (
+                local_matrix
+            )
+            energy += np.dot(
+                weights,
+                4.0
+                * np.pi
+                * quadrature.r**2
+                * np.asarray(evaluated.energy_density),
+            )
+
+        matrix = (
+            weak_matrix[1:-1, 1:-1] / self.radial_weights[:, None]
+        )
+
+        # Evaluate nodal quantities for diagnostics and sampled output.
+        density_derivative = self._radial_density_derivative(
+            radial_orbitals, radial_density
+        )
+        gradient_squared = density_derivative**2
+        values = _functional_values(
+            self.functional, density, gradient_squared
+        )
+        density_part = np.asarray(values.density_derivative)
+        sigma_part = np.asarray(values.sigma_derivative)
+        flux = 2.0 * sigma_part * density_derivative
+
+        # Retain a pointwise strong-form Euler potential for diagnostics. The
+        # SCF equations use the symmetric weak matrix constructed above.
+        full_radial_flux = np.zeros(len(self.grid.r))
+        full_radial_flux[1:-1] = self.r**2 * flux
+        potential = density_part - (
+            self.grid.D1[1:-1] @ full_radial_flux
+        ) / self.r**2
+        return values, gradient_squared, potential, matrix, float(energy)
+
     def _assemble(self, radial_orbitals):
         checked = self._checked_radial_orbitals(radial_orbitals)
         radial_density = np.zeros(len(self.r))
@@ -177,23 +325,39 @@ class SphericalKohnSham(SphericalHartreeFock):
 
         # radial_Coulomb[0] contains 4*pi times the weighted monopole kernel.
         hartree = self.radial_coulomb[0] @ (radial_density / (4.0 * np.pi))
-        xc = _functional_values(self.functional, density)
-        xc_potential = np.asarray(xc.potential, dtype=float)
-        local_potential = hartree + xc_potential
+        if _requires_gradient(self.functional):
+            xc, gradient_squared, xc_potential, xc_matrix, xc_energy = (
+                self._semilocal_xc(checked, radial_density, density)
+            )
+            xc_energy_density = np.asarray(xc.energy_density)
+        else:
+            xc = evaluate_spherical_functional(self.functional, density)
+            gradient_squared = None
+            xc_potential = xc.potential
+            xc_energy_density = xc.energy_density
+            xc_matrix = np.diag(xc_potential)
+            xc_energy = np.dot(
+                self.radial_weights,
+                4.0 * np.pi * self.r**2 * xc_energy_density,
+            )
 
         matrices = {}
         for l in self._occupied_l:
             matrix = self.core.radial_matrix(l).astype(np.complex128)
-            matrix[np.diag_indices_from(matrix)] += local_potential
+            matrix[np.diag_indices_from(matrix)] += hartree
+            matrix += xc_matrix
             matrices[l] = matrix
 
         return {
             "radial_orbitals": checked,
             "radial_density": radial_density,
             "density": density,
+            "density_gradient_squared": gradient_squared,
             "hartree_potential": hartree,
             "xc_potential": xc_potential,
-            "xc_energy_density": np.asarray(xc.energy_density, dtype=float),
+            "xc_matrix": xc_matrix,
+            "xc_energy_density": xc_energy_density,
+            "xc_energy": float(xc_energy),
             "matrices": matrices,
         }
 
@@ -241,10 +405,7 @@ class SphericalKohnSham(SphericalHartreeFock):
             self.radial_weights,
             state["radial_density"] * state["hartree_potential"],
         )
-        xc_energy = np.dot(
-            self.radial_weights,
-            4.0 * np.pi * self.r**2 * state["xc_energy_density"],
-        )
+        xc_energy = state["xc_energy"]
         if abs(kinetic_energy.imag) > 1e-8:
             raise RuntimeError(
                 "The Kohn--Sham kinetic energy acquired a non-negligible "
@@ -259,8 +420,14 @@ class SphericalKohnSham(SphericalHartreeFock):
         self._last_ks_state = {
             "density": state["density"].copy(),
             "radial_density": state["radial_density"].copy(),
+            "density_gradient_squared": (
+                None
+                if state["density_gradient_squared"] is None
+                else state["density_gradient_squared"].copy()
+            ),
             "hartree_potential": state["hartree_potential"].copy(),
             "xc_potential": state["xc_potential"].copy(),
+            "xc_matrix": state["xc_matrix"].copy(),
             "kinetic_energy": kinetic_energy,
             "external_energy": external_energy,
             "hartree_energy": hartree_energy,
@@ -271,7 +438,16 @@ class SphericalKohnSham(SphericalHartreeFock):
     def _result_metadata(self):
         if self._last_ks_state is None:
             raise RuntimeError("No Kohn--Sham state has been evaluated.")
-        return {"functional": self.functional, **self._last_ks_state}
+        return {
+            "functional": self.functional,
+            "initial_guess": self.initial_guess,
+            "xc_quadrature_order": (
+                None
+                if self.xc_quadrature_order is None
+                else self.xc_quadrature_order.copy()
+            ),
+            **self._last_ks_state,
+        }
 
 
 class SphericalAtomicKohnSham(SphericalKohnSham):
@@ -300,6 +476,8 @@ class SphericalAtomicKohnSham(SphericalKohnSham):
         diis=True,
         diis_start=3,
         diis_size=8,
+        initial_guess="auto",
+        xc_quadrature_order=None,
     ):
         self.configuration = closed_shell_atom(atom, charge=charge)
         super().__init__(
@@ -319,6 +497,8 @@ class SphericalAtomicKohnSham(SphericalKohnSham):
             diis=diis,
             diis_start=diis_start,
             diis_size=diis_size,
+            initial_guess=initial_guess,
+            xc_quadrature_order=xc_quadrature_order,
         )
 
     def _make_core(self):

@@ -8,7 +8,7 @@ from grid_lib.pseudospectral_grids.gauss_legendre_lobatto import (
 )
 from integrator_lib import CrankNicolson
 
-from tdmcscf.dft import LDAVWN
+from tdmcscf.dft import LDAVWN, PBE
 from tdmcscf.grid.spherical import (
     AtomicCoreHamiltonian,
     SphericalMeanFieldBuilder,
@@ -39,13 +39,16 @@ def normalized_orbitals(core, count=1, seed=29):
     return (orthogonal / sqrt_weights[:, None]).T.reshape(shape)
 
 
-def equation(radial_grid, gauge="canonical"):
+def equation(radial_grid, gauge="canonical", functional=None):
     core = AtomicCoreHamiltonian(radial_grid, 1, m_max=0, Z=2)
     hartree = SphericalMeanFieldBuilder(
         radial_grid, 1, m_max=0, L_max=2, M_max=0
     )
     xc = SphericalXCBuilder(
-        radial_grid, 1, m_max=0, functional=LDAVWN()
+        radial_grid,
+        1,
+        m_max=0,
+        functional=LDAVWN() if functional is None else functional,
     )
     return SphericalRestrictedTDKS(
         core,
@@ -161,3 +164,17 @@ def test_fixed_m_frozen_rhs_accepts_full_space_krylov_vectors(radial_grid):
     )
     np.testing.assert_array_equal(propagated[:, :, channel_m != 0], 0.0)
     np.testing.assert_allclose(tdks.orbital_norms(propagated), 1.0, atol=3e-11)
+
+
+def test_pbe_instantaneous_and_frozen_actions_are_finite(radial_grid):
+    tdks = equation(radial_grid, functional=PBE())
+    orbitals = normalized_orbitals(tdks.core)
+    instantaneous = tdks.mean_field_action(orbitals)
+    frozen = tdks.freeze_rhs(orbitals)(orbitals, 0.2)
+    assert np.all(np.isfinite(instantaneous))
+    assert np.all(np.isfinite(frozen))
+    np.testing.assert_allclose(
+        frozen,
+        tdks.linear_rhs(orbitals, 0.2) + tdks.nonlinear_rhs(orbitals, 0.2),
+        atol=5e-12,
+    )

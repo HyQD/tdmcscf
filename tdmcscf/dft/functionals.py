@@ -1,8 +1,10 @@
-r"""Local spin-unpolarized exchange-correlation functionals.
+r"""Local and semilocal spin-unpolarized exchange-correlation functionals.
 
 All functionals use the total electron density ``n = n_up + n_down`` and
 return the energy density ``f(n)`` and its functional derivative
-``v(n) = df/dn`` in atomic units.  They contain no grid or coordinate-system
+``v(n) = df/dn`` in atomic units. Semilocal functionals additionally accept
+``sigma = grad(n) dot grad(n)`` and return the partial derivatives needed to
+construct their Euler potential. They contain no grid or coordinate-system
 logic and accept either scalars or NumPy arrays.
 """
 
@@ -14,6 +16,10 @@ import numpy as np
 
 _DENSITY_ERROR = "density must contain finite, nonnegative real values."
 _EXCHANGE_FACTOR = (3.0 / np.pi) ** (1.0 / 3.0)
+_PBE_KAPPA = 0.804
+_PBE_BETA = 0.06672455060314922
+_PBE_MU = _PBE_BETA * np.pi**2 / 3.0
+_PBE_GAMMA = (1.0 - np.log(2.0)) / np.pi**2
 
 
 def _density(value):
@@ -37,6 +43,29 @@ def _nonnegative_real(value, name):
     return value
 
 
+def _density_and_sigma(density, gradient_squared):
+    density = _density(density)
+    sigma = np.asarray(gradient_squared)
+    if (
+        not np.issubdtype(sigma.dtype, np.number)
+        or np.iscomplexobj(sigma)
+        or not np.all(np.isfinite(sigma))
+        or np.any(sigma < 0)
+    ):
+        raise ValueError(
+            "gradient_squared must contain finite, nonnegative real values."
+        )
+    try:
+        density, sigma = np.broadcast_arrays(
+            density, sigma.astype(float, copy=False)
+        )
+    except ValueError as error:
+        raise ValueError(
+            "density and gradient_squared must be broadcastable."
+        ) from error
+    return density, sigma
+
+
 @dataclass(frozen=True)
 class LocalFunctionalValues:
     r"""Pointwise energy density and multiplicative potential.
@@ -50,6 +79,22 @@ class LocalFunctionalValues:
 
     energy_density: np.ndarray
     potential: np.ndarray
+
+
+@dataclass(frozen=True)
+class SemilocalFunctionalValues:
+    r"""Pointwise GGA energy density and its two partial derivatives.
+
+    For ``f(n, sigma)`` with ``sigma = grad(n) dot grad(n)``, the returned
+    arrays are ``f``, ``partial f / partial n``, and
+    ``partial f / partial sigma``. The coordinate-specific Euler potential is
+
+    ``v = density_derivative - 2*div(sigma_derivative * grad(n))``.
+    """
+
+    energy_density: np.ndarray
+    density_derivative: np.ndarray
+    sigma_derivative: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -200,3 +245,221 @@ class LDAVWN(XAlphaVWN):
     @property
     def name(self):
         return "LDA-VWN5"
+
+
+def _pw92_modified_unpolarized(density):
+    """Return modified-PW92 epsilon_c and its density derivative.
+
+    This is the unpolarized uniform-gas parametrization used by standard PBE
+    and identified as ``LDA_C_PW_MOD`` by LibXC.
+    """
+    A = 0.0310907
+    alpha_1 = 0.21370
+    beta_1 = 7.5957
+    beta_2 = 3.5876
+    beta_3 = 1.6382
+    beta_4 = 0.49294
+
+    rs = np.cbrt(3.0 / (4.0 * np.pi * density))
+    sqrt_rs = np.sqrt(rs)
+    polynomial = (
+        beta_1 * sqrt_rs
+        + beta_2 * rs
+        + beta_3 * rs * sqrt_rs
+        + beta_4 * rs**2
+    )
+    polynomial_derivative = (
+        0.5 * beta_1 / sqrt_rs
+        + beta_2
+        + 1.5 * beta_3 * sqrt_rs
+        + 2.0 * beta_4 * rs
+    )
+    argument = 2.0 * A * polynomial
+    argument_derivative = 2.0 * A * polynomial_derivative
+    logarithm = np.log1p(1.0 / argument)
+    logarithm_derivative = -argument_derivative / (
+        argument * (argument + 1.0)
+    )
+    epsilon = -2.0 * A * (1.0 + alpha_1 * rs) * logarithm
+    epsilon_rs = -2.0 * A * (
+        alpha_1 * logarithm
+        + (1.0 + alpha_1 * rs) * logarithm_derivative
+    )
+    epsilon_density = -rs * epsilon_rs / (3.0 * density)
+    return epsilon, epsilon_density
+
+
+class PBEExchange:
+    r"""Spin-unpolarized Perdew--Burke--Ernzerhof exchange.
+
+    ``evaluate(density, gradient_squared)`` returns the energy density
+    ``f_x(n, sigma)`` and its partial derivatives with respect to ``n`` and
+    ``sigma = grad(n) dot grad(n)``.
+    """
+
+    requires_gradient = True
+    kappa = _PBE_KAPPA
+    mu = _PBE_MU
+
+    def __init__(self, density_cutoff=1e-30):
+        self.density_cutoff = _nonnegative_real(
+            density_cutoff, "density_cutoff"
+        )
+
+    @property
+    def name(self):
+        return "PBE exchange"
+
+    def evaluate(self, density, gradient_squared):
+        density, sigma = _density_and_sigma(density, gradient_squared)
+        energy_density = np.zeros_like(density)
+        density_derivative = np.zeros_like(density)
+        sigma_derivative = np.zeros_like(density)
+        positive = density > self.density_cutoff
+        if not np.any(positive):
+            return SemilocalFunctionalValues(
+                energy_density, density_derivative, sigma_derivative
+            )
+
+        n = density[positive]
+        selected_sigma = sigma[positive]
+        reduced_gradient_factor = 1.0 / (
+            4.0 * (3.0 * np.pi**2) ** (2.0 / 3.0)
+        )
+        s_squared = (
+            reduced_gradient_factor * selected_sigma * n ** (-8.0 / 3.0)
+        )
+        denominator = 1.0 + self.mu * s_squared / self.kappa
+        enhancement = 1.0 + self.kappa - self.kappa / denominator
+        enhancement_derivative = self.mu / denominator**2
+        exchange_coefficient = 0.75 * _EXCHANGE_FACTOR
+
+        energy_density[positive] = (
+            -exchange_coefficient * n ** (4.0 / 3.0) * enhancement
+        )
+        density_derivative[positive] = -exchange_coefficient * np.cbrt(n) * (
+            4.0 * enhancement / 3.0
+            - 8.0 * s_squared * enhancement_derivative / 3.0
+        )
+        sigma_derivative[positive] = (
+            -exchange_coefficient
+            * reduced_gradient_factor
+            * n ** (-4.0 / 3.0)
+            * enhancement_derivative
+        )
+        return SemilocalFunctionalValues(
+            energy_density, density_derivative, sigma_derivative
+        )
+
+
+class PBECorrelation:
+    r"""Spin-unpolarized PBE correlation with modified-PW92 LDA correlation."""
+
+    requires_gradient = True
+    beta = _PBE_BETA
+    gamma = _PBE_GAMMA
+
+    def __init__(self, density_cutoff=1e-30):
+        self.density_cutoff = _nonnegative_real(
+            density_cutoff, "density_cutoff"
+        )
+
+    @property
+    def name(self):
+        return "PBE correlation"
+
+    def evaluate(self, density, gradient_squared):
+        density, sigma = _density_and_sigma(density, gradient_squared)
+        energy_density = np.zeros_like(density)
+        density_derivative = np.zeros_like(density)
+        sigma_derivative = np.zeros_like(density)
+        positive = density > self.density_cutoff
+        if not np.any(positive):
+            return SemilocalFunctionalValues(
+                energy_density, density_derivative, sigma_derivative
+            )
+
+        n = density[positive]
+        selected_sigma = sigma[positive]
+        epsilon, epsilon_density = _pw92_modified_unpolarized(n)
+        t_squared_factor = np.pi / (
+            16.0 * (3.0 * np.pi**2) ** (1.0 / 3.0)
+        )
+        t_squared = t_squared_factor * selected_sigma * n ** (-7.0 / 3.0)
+        ratio = self.beta / self.gamma
+        exponential_minus_one = np.expm1(-epsilon / self.gamma)
+        coefficient = ratio / exponential_minus_one
+        exponential = exponential_minus_one + 1.0
+        coefficient_epsilon = (
+            ratio
+            * exponential
+            / (self.gamma * exponential_minus_one**2)
+        )
+
+        product = coefficient * t_squared
+        denominator = 1.0 + product + product**2
+        inverse_denominator = 1.0 / denominator
+        rational = (
+            t_squared * inverse_denominator * (1.0 + product)
+        )
+        rational_t = (1.0 + 2.0 * product) * inverse_denominator**2
+        rational_coefficient = -(
+            t_squared * inverse_denominator
+        ) ** 2 * product * (2.0 + product)
+        logarithm_argument = 1.0 + ratio * rational
+        correction = self.gamma * np.log(logarithm_argument)
+        correction_t = (
+            self.gamma * ratio * rational_t / logarithm_argument
+        )
+        correction_coefficient = (
+            self.gamma
+            * ratio
+            * rational_coefficient
+            / logarithm_argument
+        )
+
+        t_density = -7.0 * t_squared / (3.0 * n)
+        t_sigma = t_squared_factor * n ** (-7.0 / 3.0)
+        energy_density[positive] = n * (epsilon + correction)
+        density_derivative[positive] = epsilon + correction + n * (
+            (1.0 + correction_coefficient * coefficient_epsilon)
+            * epsilon_density
+            + correction_t * t_density
+        )
+        sigma_derivative[positive] = n * correction_t * t_sigma
+        return SemilocalFunctionalValues(
+            energy_density, density_derivative, sigma_derivative
+        )
+
+
+class PBE:
+    r"""Standard spin-unpolarized PBE exchange-correlation functional."""
+
+    requires_gradient = True
+
+    def __init__(self, density_cutoff=1e-30):
+        self.density_cutoff = _nonnegative_real(
+            density_cutoff, "density_cutoff"
+        )
+        self.components = (
+            PBEExchange(self.density_cutoff),
+            PBECorrelation(self.density_cutoff),
+        )
+
+    @property
+    def name(self):
+        return "PBE"
+
+    def evaluate(self, density, gradient_squared):
+        density, sigma = _density_and_sigma(density, gradient_squared)
+        energy_density = np.zeros_like(density)
+        density_derivative = np.zeros_like(density)
+        sigma_derivative = np.zeros_like(density)
+        for component in self.components:
+            values = component.evaluate(density, sigma)
+            energy_density += values.energy_density
+            density_derivative += values.density_derivative
+            sigma_derivative += values.sigma_derivative
+        return SemilocalFunctionalValues(
+            energy_density, density_derivative, sigma_derivative
+        )

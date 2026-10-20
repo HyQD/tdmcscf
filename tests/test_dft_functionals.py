@@ -4,6 +4,9 @@ import pytest
 from tdmcscf.dft import (
     DiracExchange,
     LDAVWN,
+    PBE,
+    PBECorrelation,
+    PBEExchange,
     SumLocalFunctional,
     VWN5Correlation,
     XAlphaExchange,
@@ -137,3 +140,100 @@ def test_sum_requires_functional_components():
         SumLocalFunctional()
     with pytest.raises(TypeError, match="evaluate"):
         SumLocalFunctional(object())
+
+
+@pytest.mark.parametrize(
+    "functional,expected_energy,expected_density_derivative,expected_sigma_derivative",
+    [
+        (
+            PBEExchange(),
+            [-0.0343264047916244, -0.7391510592579351],
+            [-0.4564729090966313, -0.9839568734437065],
+            [-0.09093660937705003, -0.00422644348269713],
+        ),
+        (
+            PBECorrelation(),
+            [-0.00527980365779292, -0.07061275944383515],
+            [-0.06115010248649831, -0.08022709770881299],
+            [0.08991573711031386, 0.00415558445540934],
+        ),
+        (
+            PBE(),
+            [-0.03960620844941731, -0.8097638187017703],
+            [-0.5176230115831296, -1.0641839711525196],
+            [-0.001020872266736167, -0.00007085902728778959],
+        ),
+    ],
+)
+def test_pbe_matches_independent_libxc_reference_values(
+    functional,
+    expected_energy,
+    expected_density_derivative,
+    expected_sigma_derivative,
+):
+    density = np.array([0.1, 1.0])
+    gradient_squared = np.array([0.0005, 0.14])
+    values = functional.evaluate(density, gradient_squared)
+    np.testing.assert_allclose(values.energy_density, expected_energy, atol=2e-16)
+    np.testing.assert_allclose(
+        values.density_derivative, expected_density_derivative, atol=2e-15
+    )
+    np.testing.assert_allclose(
+        values.sigma_derivative, expected_sigma_derivative, atol=2e-15
+    )
+
+
+@pytest.mark.parametrize("functional", [PBEExchange(), PBECorrelation(), PBE()])
+def test_pbe_partial_derivatives_are_energy_density_derivatives(functional):
+    density = np.logspace(-6, 1, 11)
+    gradient_squared = np.logspace(-8, 0, 11)
+    density_step = 1e-5 * density
+    sigma_step = 1e-5 * gradient_squared
+    density_difference = (
+        functional.evaluate(density + density_step, gradient_squared).energy_density
+        - functional.evaluate(
+            density - density_step, gradient_squared
+        ).energy_density
+    ) / (2.0 * density_step)
+    sigma_difference = (
+        functional.evaluate(density, gradient_squared + sigma_step).energy_density
+        - functional.evaluate(
+            density, gradient_squared - sigma_step
+        ).energy_density
+    ) / (2.0 * sigma_step)
+    values = functional.evaluate(density, gradient_squared)
+    np.testing.assert_allclose(
+        values.density_derivative, density_difference, rtol=3e-8, atol=2e-10
+    )
+    np.testing.assert_allclose(
+        values.sigma_derivative, sigma_difference, rtol=3e-8, atol=5e-10
+    )
+
+
+def test_pbe_is_sum_of_exchange_and_correlation():
+    density = np.logspace(-8, 1, 12)
+    gradient_squared = np.logspace(-10, 0, 12)
+    combined = PBE().evaluate(density, gradient_squared)
+    exchange = PBEExchange().evaluate(density, gradient_squared)
+    correlation = PBECorrelation().evaluate(density, gradient_squared)
+    for name in ("energy_density", "density_derivative", "sigma_derivative"):
+        np.testing.assert_allclose(
+            getattr(combined, name),
+            getattr(exchange, name) + getattr(correlation, name),
+        )
+
+
+def test_pbe_zero_density_is_finite_and_zero():
+    values = PBE().evaluate(np.zeros(3), np.array([0.0, 1.0, 1e20]))
+    np.testing.assert_array_equal(values.energy_density, 0.0)
+    np.testing.assert_array_equal(values.density_derivative, 0.0)
+    np.testing.assert_array_equal(values.sigma_derivative, 0.0)
+
+
+@pytest.mark.parametrize(
+    "gradient_squared",
+    [np.array([-1.0]), np.array([np.nan]), np.array([1.0 + 1.0j])],
+)
+def test_pbe_rejects_invalid_gradient_squared(gradient_squared):
+    with pytest.raises(ValueError, match="gradient_squared"):
+        PBE().evaluate(np.ones(1), gradient_squared)

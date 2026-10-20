@@ -13,8 +13,9 @@ class SphericalRestrictedTDKS(SphericalRestrictedTDHF):
 
     ``H[n](t) = h(t) + V_H[n](t) + V_xc[n](t)``.
 
-    The Hartree potential uses ``mean_fields`` and the local XC potential uses
-    ``xc``. Both are rebuilt from the instantaneous spin-summed density.
+    The Hartree potential uses ``mean_fields`` and the local or semilocal XC
+    operator uses ``xc``. Both are rebuilt from the instantaneous spin-summed
+    density.
     Canonical and orthogonal occupied-orbital gauges are supported in the
     same way as by :class:`SphericalRestrictedTDHF`.
     """
@@ -61,7 +62,7 @@ class SphericalRestrictedTDKS(SphericalRestrictedTDHF):
         return self._project_fixed_m(result)
 
     def mean_field_action(self, orbitals):
-        """Apply the instantaneous Hartree and adiabatic XC potentials."""
+        """Apply the instantaneous Hartree and adiabatic XC operators."""
         values = self._project_fixed_m(orbitals)
         hartree_fields = self._hartree_fields(values)
         xc_potential = self.xc.build(values)
@@ -82,7 +83,7 @@ class SphericalRestrictedTDKS(SphericalRestrictedTDHF):
         return self.hamiltonian_action(orbitals, time)
 
     def freeze_rhs(self, reference_orbitals):
-        r"""Freeze ``V_H[n] + V_xc[n]`` and return a linear orbital RHS."""
+        r"""Freeze the Hartree--XC operator and return a linear orbital RHS."""
         reference = self._project_fixed_m(reference_orbitals).copy()
         hartree_fields = self._hartree_fields(reference)
         xc_potential = self.xc.build(reference)
