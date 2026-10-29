@@ -3,7 +3,7 @@ r"""Restricted time-dependent Hartree--Fock actions in spherical coordinates."""
 import numpy as np
 
 from ._validation import _orbitals
-from .atomic_core import SphericalCoreHamiltonian
+from .core import SphericalCoreOperator, validate_spherical_core_operator
 from .dipole_fields import SphericalDipoleField
 from .mean_fields import SphericalMeanFieldBuilder
 
@@ -13,8 +13,8 @@ class SphericalRestrictedTDHF:
 
     Parameters
     ----------
-    core : SphericalCoreHamiltonian
-        Time-independent kinetic and central-potential operator.
+    core : SphericalCoreOperator
+        Time-independent spherical one-body core operator.
     mean_fields : SphericalMeanFieldBuilder
         Builder whose orbital channels match ``core``. Its ``L_max`` and
         ``M_max`` determine the electron--electron Coulomb truncation.
@@ -50,8 +50,7 @@ class SphericalRestrictedTDHF:
         orbital_gauge="orthogonal",
         orbital_m=None,
     ):
-        if not isinstance(core, SphericalCoreHamiltonian):
-            raise TypeError("core must be a SphericalCoreHamiltonian.")
+        core = validate_spherical_core_operator(core)
         if not isinstance(mean_fields, SphericalMeanFieldBuilder):
             raise TypeError("mean_fields must be a SphericalMeanFieldBuilder.")
         if mean_fields.orbital_shape != core.orbital_shape:
@@ -81,7 +80,9 @@ class SphericalRestrictedTDHF:
                     "orbital_m must be a one-dimensional integer sequence."
                 )
             if np.any(np.abs(magnetic) > core.m_max):
-                raise ValueError("orbital_m contains a value outside the orbital basis.")
+                raise ValueError(
+                    "orbital_m contains a value outside the orbital basis."
+                )
             magnetic = tuple(int(m) for m in magnetic)
 
         self.core = core
