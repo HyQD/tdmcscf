@@ -6,7 +6,7 @@ from .atoms import (
     atomic_configurations,
     closed_shell_atom,
 )
-from .diatomic import AxialDiatomic
+from .diatomic import AxialClosedShellOccupation, AxialDiatomic
 from .spherical import (
     Atomic,
     ClosedShellOccupation,
@@ -19,6 +19,7 @@ from .spherical import (
 __all__ = [
     "Atomic",
     "AtomicConfiguration",
+    "AxialClosedShellOccupation",
     "AxialDiatomic",
     "ClosedShellOccupation",
     "ClosedSubshell",

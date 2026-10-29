@@ -1,7 +1,34 @@
 import numpy as np
 import pytest
 
-from tdmcscf.systems import AxialDiatomic
+from tdmcscf.systems import AxialClosedShellOccupation, AxialDiatomic
+
+
+def test_axial_closed_shell_occupation_expands_signed_sectors():
+    occupation = AxialClosedShellOccupation({0: 2, 1: 1, 2: 2})
+
+    assert dict(occupation.orbitals_per_abs_m) == {0: 2, 1: 1, 2: 2}
+    assert dict(occupation.orbitals_per_m) == {
+        -2: 2,
+        -1: 1,
+        0: 2,
+        1: 1,
+        2: 2,
+    }
+    assert occupation.occupied_m_max == 2
+    assert occupation.n_doubly_occupied == 8
+    assert occupation.electron_count == 16
+    assert occupation.orbital_m == (-2, -2, -1, 0, 0, 1, 2, 2)
+    assert occupation == AxialClosedShellOccupation(occupation)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [{}, {True: 1}, {-1: 1}, {0: 0}, {0: 1.5}, [(0, 1)]],
+)
+def test_invalid_axial_closed_shell_occupation(value):
+    with pytest.raises((TypeError, ValueError)):
+        AxialClosedShellOccupation(value)
 
 
 def test_h2_plus_geometry_and_derived_properties():

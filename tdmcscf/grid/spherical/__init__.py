@@ -2,6 +2,12 @@
 
 from .atomic_core import AtomicCoreHamiltonian, SphericalCoreHamiltonian
 from .axial_core import AxialCoreHamiltonian
+from .axial_hartree_fock import (
+    AxialHartreeFock,
+    AxialHartreeFockResult,
+    FixedDensityAxialFock,
+    SphericalDiatomicHartreeFock,
+)
 from .core import SphericalCoreOperator
 from .dipole_fields import DipoleFieldTerm, SphericalDipoleField
 from .hartree_fock import (
@@ -46,8 +52,11 @@ __all__ = [
     "AtomicCoreHamiltonian",
     "AtomicHartreeFockResult",
     "AxialCoreHamiltonian",
+    "AxialHartreeFock",
+    "AxialHartreeFockResult",
     "AtomicKohnShamResult",
     "DipoleFieldTerm",
+    "FixedDensityAxialFock",
     "HartreeFockResult",
     "KohnShamResult",
     "MeanFieldPotential",
@@ -60,6 +69,7 @@ __all__ = [
     "SphericalCoreHamiltonian",
     "SphericalCoreOperator",
     "SphericalDipoleField",
+    "SphericalDiatomicHartreeFock",
     "SphericalHartreeFock",
     "SphericalMeanFieldBuilder",
     "SphericalRestrictedTDKS",

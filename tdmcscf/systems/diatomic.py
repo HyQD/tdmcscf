@@ -1,6 +1,8 @@
 """Clamped, midpoint-centred axial diatomic systems."""
 
+from collections.abc import Mapping
 from numbers import Integral, Real
+from types import MappingProxyType
 
 import numpy as np
 
@@ -46,6 +48,96 @@ _ELEMENT_SYMBOLS = (
 _NUCLEAR_CHARGES = {
     symbol: index for index, symbol in enumerate(_ELEMENT_SYMBOLS, start=1)
 }
+
+
+class AxialClosedShellOccupation:
+    r"""Closed-shell spatial-orbital counts in absolute-``m`` sectors.
+
+    ``orbitals_per_abs_m[0]`` is the number of doubly occupied sigma
+    orbitals. For ``abs(m) > 0``, the count is present in both signed sectors
+    ``+m`` and ``-m``. The electron count is therefore
+
+    ``2 * (n_0 + 2 * sum_{m>0} n_m)``.
+    """
+
+    def __init__(self, orbitals_per_abs_m):
+        if isinstance(orbitals_per_abs_m, AxialClosedShellOccupation):
+            counts = dict(orbitals_per_abs_m.orbitals_per_abs_m)
+        elif isinstance(orbitals_per_abs_m, Mapping):
+            counts = dict(orbitals_per_abs_m)
+        else:
+            raise TypeError("orbitals_per_abs_m must be a mapping.")
+        if not counts:
+            raise ValueError("orbitals_per_abs_m cannot be empty.")
+        checked = {}
+        for magnetic, count in counts.items():
+            if isinstance(magnetic, (bool, np.bool_)) or not isinstance(
+                magnetic, Integral
+            ):
+                raise TypeError("Magnetic sectors must be nonnegative integers.")
+            if isinstance(count, (bool, np.bool_)) or not isinstance(
+                count, Integral
+            ):
+                raise TypeError("Orbital counts must be positive integers.")
+            magnetic = int(magnetic)
+            count = int(count)
+            if magnetic < 0:
+                raise ValueError("Magnetic sectors must be nonnegative integers.")
+            if count <= 0:
+                raise ValueError("Orbital counts must be positive integers.")
+            checked[magnetic] = count
+        self._counts = MappingProxyType(dict(sorted(checked.items())))
+
+    @property
+    def orbitals_per_abs_m(self):
+        return self._counts
+
+    @property
+    def occupied_m_max(self):
+        return max(self._counts)
+
+    @property
+    def orbitals_per_m(self):
+        signed = {}
+        for magnetic, count in self._counts.items():
+            signed[magnetic] = count
+            if magnetic:
+                signed[-magnetic] = count
+        return MappingProxyType(dict(sorted(signed.items())))
+
+    @property
+    def n_doubly_occupied(self):
+        return sum(
+            (1 if magnetic == 0 else 2) * count
+            for magnetic, count in self._counts.items()
+        )
+
+    @property
+    def electron_count(self):
+        return 2 * self.n_doubly_occupied
+
+    @property
+    def orbital_labels(self):
+        return tuple(
+            (index, magnetic)
+            for magnetic, count in self.orbitals_per_m.items()
+            for index in range(count)
+        )
+
+    @property
+    def orbital_m(self):
+        return tuple(magnetic for _, magnetic in self.orbital_labels)
+
+    def __repr__(self):
+        return (
+            "AxialClosedShellOccupation(orbitals_per_abs_m="
+            f"{dict(self._counts)!r})"
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, AxialClosedShellOccupation):
+            return NotImplemented
+        return dict(self._counts) == dict(other._counts)
 
 
 def _positive_real(value, name):
