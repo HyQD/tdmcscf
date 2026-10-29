@@ -1,6 +1,8 @@
 """Spherical-coordinate tools for nodal reduced radial orbitals."""
 
 from .atomic_core import AtomicCoreHamiltonian, SphericalCoreHamiltonian
+from .axial_core import AxialCoreHamiltonian
+from .core import SphericalCoreOperator
 from .dipole_fields import DipoleFieldTerm, SphericalDipoleField
 from .hartree_fock import (
     AtomicHartreeFockResult,
@@ -43,6 +45,7 @@ from .interface import (
 __all__ = [
     "AtomicCoreHamiltonian",
     "AtomicHartreeFockResult",
+    "AxialCoreHamiltonian",
     "AtomicKohnShamResult",
     "DipoleFieldTerm",
     "HartreeFockResult",
@@ -55,6 +58,7 @@ __all__ = [
     "SphericalAtomicKohnSham",
     "SphericalCoulombPotential",
     "SphericalCoreHamiltonian",
+    "SphericalCoreOperator",
     "SphericalDipoleField",
     "SphericalHartreeFock",
     "SphericalMeanFieldBuilder",

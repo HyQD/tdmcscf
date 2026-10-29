@@ -117,6 +117,24 @@ def test_mass_scales_only_kinetic_energy(grid):
     )
 
 
+@pytest.mark.parametrize("m", [-1, 0, 1])
+def test_central_core_implements_fixed_m_core_protocol(grid, m):
+    core = AtomicCoreHamiltonian(grid, 3, m_max=2, Z=2.3)
+    rng = np.random.default_rng(14 + m)
+    shape = core.fixed_m_shape(m)
+    orbital = rng.normal(size=shape) + 1j * rng.normal(size=shape)
+    expected = (core.fixed_m_matrix(m) @ orbital.ravel()).reshape(shape)
+
+    np.testing.assert_allclose(core.apply_fixed_m(orbital, m), expected)
+    symmetric = core.fixed_m_matrix(m, representation="symmetric")
+    np.testing.assert_allclose(symmetric, symmetric.conj().T, atol=2.0e-12)
+    transformed = core.to_symmetric_fixed_m(orbital, m)
+    np.testing.assert_allclose(
+        core.from_symmetric_fixed_m(transformed, m),
+        orbital,
+    )
+
+
 @pytest.mark.parametrize("Z", [0, -1, np.nan, np.inf, 1j, True, [1.0]])
 def test_invalid_charge(grid, Z):
     for operator in (SphericalCoulombPotential, AtomicCoreHamiltonian):
